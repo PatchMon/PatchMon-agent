@@ -104,27 +104,8 @@ func showDiagnostics() error {
 	fmt.Printf("=== Network Connectivity & API Credentials ===\n")
 	fmt.Printf("Server URL: %s\n", cfg.PatchmonServer)
 
-	// Extract hostname and port from server URL for basic connectivity test
-	serverURL := cfg.PatchmonServer
-	var serverHost, serverPort string
-
-	trimmed := strings.TrimPrefix(serverURL, "http://")
-	trimmed = strings.TrimPrefix(trimmed, "https://")
-	hostPort := strings.SplitN(trimmed, "/", 2)[0]
-	if strings.Contains(hostPort, ":") {
-		parts := strings.SplitN(hostPort, ":", 2)
-		serverHost = parts[0]
-		serverPort = parts[1]
-	} else {
-		serverHost = hostPort
-		if strings.HasPrefix(serverURL, "https://") {
-			serverPort = "443"
-		} else {
-			serverPort = "80"
-		}
-	}
-
 	// Basic network connectivity test
+	serverHost, serverPort := extractUrlHostAndPort(cfg.PatchmonServer)
 	if isReachable := utils.TcpPing(serverHost, serverPort); isReachable {
 		fmt.Printf("Basic network connectivity: Yes\n")
 	} else {
@@ -151,6 +132,26 @@ func showDiagnostics() error {
 	}
 
 	return nil
+}
+
+// extractUrlHostAndPort extracts the host and port from a URL string
+func extractUrlHostAndPort(url string) (host string, port string) {
+	trimmed := strings.TrimPrefix(url, "http://")
+	trimmed = strings.TrimPrefix(trimmed, "https://")
+	hostPort := strings.SplitN(trimmed, "/", 2)[0]
+	if strings.Contains(hostPort, ":") {
+		parts := strings.SplitN(hostPort, ":", 2)
+		host = parts[0]
+		port = parts[1]
+	} else {
+		host = hostPort
+		if strings.HasPrefix(url, "https://") {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+	return host, port
 }
 
 func getRecentLogs(logFile string) []string {
