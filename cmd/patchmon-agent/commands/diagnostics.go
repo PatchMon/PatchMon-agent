@@ -3,15 +3,13 @@ package commands
 import (
 	"bufio"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"runtime"
-	"slices"
 	"strings"
-	"time"
 
 	"patchmon-agent/internal/crontab"
+	"patchmon-agent/internal/utils"
 	"patchmon-agent/internal/version"
 
 	"github.com/spf13/cobra"
@@ -38,7 +36,7 @@ func showDiagnostics() error {
 	fmt.Printf("OS: %s\n", runtime.GOOS)
 	fmt.Printf("Architecture: %s\n", runtime.GOARCH)
 
-	if kernelVersion, err := getKernelVersion(); err == nil {
+	if kernelVersion, err := utils.GetKernelVersion(); err == nil {
 		fmt.Printf("Kernel: %s\n", kernelVersion)
 	}
 
@@ -106,14 +104,28 @@ func showDiagnostics() error {
 	fmt.Printf("=== Network Connectivity & API Credentials ===\n")
 	fmt.Printf("Server URL: %s\n", cfg.PatchmonServer)
 
-	// Extract hostname from server URL for basic connectivity test
-	serverURL := strings.TrimPrefix(cfg.PatchmonServer, "http://")
-	serverURL = strings.TrimPrefix(serverURL, "https://")
-	serverHost := strings.Split(serverURL, ":")[0]
-	serverHost = strings.Split(serverHost, "/")[0]
+	// Extract hostname and port from server URL for basic connectivity test
+	serverURL := cfg.PatchmonServer
+	var serverHost, serverPort string
+
+	trimmed := strings.TrimPrefix(serverURL, "http://")
+	trimmed = strings.TrimPrefix(trimmed, "https://")
+	hostPort := strings.SplitN(trimmed, "/", 2)[0]
+	if strings.Contains(hostPort, ":") {
+		parts := strings.SplitN(hostPort, ":", 2)
+		serverHost = parts[0]
+		serverPort = parts[1]
+	} else {
+		serverHost = hostPort
+		if strings.HasPrefix(serverURL, "https://") {
+			serverPort = "443"
+		} else {
+			serverPort = "80"
+		}
+	}
 
 	// Basic network connectivity test
-	if isReachable := pingHost(serverHost); isReachable {
+	if isReachable := utils.TcpPing(serverHost, serverPort); isReachable {
 		fmt.Printf("Basic network connectivity: Yes\n")
 	} else {
 		fmt.Printf("Basic network connectivity: No\n")
@@ -139,37 +151,6 @@ func showDiagnostics() error {
 	}
 
 	return nil
-}
-
-func getKernelVersion() (string, error) {
-	if data, err := os.ReadFile("/proc/version"); err == nil {
-		fields := slices.Collect(strings.FieldsSeq(string(data)))
-		if len(fields) >= 3 {
-			return fields[2], nil
-		}
-	}
-
-	// Fallback to uname
-	output, err := exec.Command("uname", "-r").Output()
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(string(output)), nil
-}
-
-func pingHost(host string) bool {
-	// Simple TCP connection test
-	conn, err := net.DialTimeout("tcp", host+":80", 5*time.Second)
-	if err != nil {
-		// Try HTTPS port
-		conn, err = net.DialTimeout("tcp", host+":443", 5*time.Second)
-		if err != nil {
-			return false
-		}
-	}
-	defer conn.Close()
-	return true
 }
 
 func getRecentLogs(logFile string) []string {
