@@ -6,7 +6,7 @@ BUILD_DIR=build
 # Get version from git tags, fallback to "dev" if not available
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 # Strip debug info and set version variable
-LDFLAGS=-ldflags "-s -w -X patchmon-agent/internal/config.AgentVersion=$(VERSION)"
+LDFLAGS=-ldflags "-s -w -X patchmon-agent/internal/version.Version=$(VERSION)"
 
 # Go variables
 GOBASE=$(shell pwd)

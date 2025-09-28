@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"patchmon-agent/internal/client"
-	"patchmon-agent/internal/config"
 	"patchmon-agent/internal/packages"
 	"patchmon-agent/internal/repositories"
 	"patchmon-agent/internal/system"
+	"patchmon-agent/internal/version"
 	"patchmon-agent/pkg/models"
+
+	"github.com/spf13/cobra"
 )
 
 // updateCmd represents the update command
@@ -81,7 +82,7 @@ func sendUpdate() error {
 		OSVersion:     osVersion,
 		Hostname:      hostname,
 		Architecture:  architecture,
-		AgentVersion:  config.AgentVersion,
+		AgentVersion:  version.Version,
 		KernelVersion: systemInfo.KernelVersion,
 		SELinuxStatus: systemInfo.SELinuxStatus,
 	}

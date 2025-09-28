@@ -3,8 +3,9 @@ package commands
 import (
 	"fmt"
 
+	"patchmon-agent/internal/version"
+
 	"github.com/spf13/cobra"
-	"patchmon-agent/internal/config"
 )
 
 // configCmd represents the config command
@@ -27,7 +28,7 @@ func showConfig() error {
 	} else {
 		fmt.Printf("  Server: Not configured\n")
 	}
-	fmt.Printf("  Agent Version: %s\n", config.AgentVersion)
+	fmt.Printf("  Agent Version: %s\n", version.Version)
 	fmt.Printf("  Config File: %s\n", cfgManager.GetConfigFile())
 	fmt.Printf("  Credentials File: %s\n", cfg.CredentialsFile)
 	fmt.Printf("  Log File: %s\n", cfg.LogFile)

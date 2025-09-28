@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-	"patchmon-agent/internal/config"
 	"patchmon-agent/internal/crontab"
+	"patchmon-agent/internal/version"
+
+	"github.com/spf13/cobra"
 )
 
 // diagnosticsCmd represents the diagnostics command
@@ -29,7 +30,7 @@ var diagnosticsCmd = &cobra.Command{
 func showDiagnostics() error {
 	cfg := cfgManager.GetConfig()
 
-	fmt.Printf("PatchMon Agent Diagnostics v%s\n", config.AgentVersion)
+	fmt.Printf("PatchMon Agent Diagnostics v%s\n", version.Version)
 	fmt.Printf("=====================================\n\n")
 
 	// System Information
@@ -49,7 +50,7 @@ func showDiagnostics() error {
 
 	// Agent Information
 	fmt.Printf("=== Agent Information ===\n")
-	fmt.Printf("Version: %s\n", config.AgentVersion)
+	fmt.Printf("Version: %s\n", version.Version)
 
 	if execPath, err := os.Executable(); err == nil {
 		fmt.Printf("Executable Path: %s\n", execPath)

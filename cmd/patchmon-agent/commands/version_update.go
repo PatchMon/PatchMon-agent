@@ -7,10 +7,11 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/spf13/cobra"
 	"patchmon-agent/internal/client"
-	"patchmon-agent/internal/config"
 	"patchmon-agent/internal/crontab"
+	"patchmon-agent/internal/version"
+
+	"github.com/spf13/cobra"
 )
 
 // checkVersionCmd represents the check-version command
@@ -57,9 +58,9 @@ func checkVersion() error {
 		return fmt.Errorf("failed to check for updates: %w", err)
 	}
 
-	if response.CurrentVersion != "" && response.CurrentVersion != config.AgentVersion {
+	if response.CurrentVersion != "" && response.CurrentVersion != version.Version {
 		logger.Warn("Agent update available!")
-		fmt.Printf("  Current version: %s\n", config.AgentVersion)
+		fmt.Printf("  Current version: %s\n", version.Version)
 		fmt.Printf("  Latest version: %s\n", response.CurrentVersion)
 		if response.ReleaseNotes != "" {
 			fmt.Printf("  Release notes: %s\n", response.ReleaseNotes)
@@ -69,7 +70,7 @@ func checkVersion() error {
 		}
 		fmt.Printf("\nTo update, run: patchmon-agent update-agent\n")
 	} else {
-		logger.Infof("Agent is up to date (version %s)", config.AgentVersion)
+		logger.Infof("Agent is up to date (version %s)", version.Version)
 	}
 
 	return nil

@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 
+	"patchmon-agent/internal/config"
+	"patchmon-agent/internal/version"
+
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"patchmon-agent/internal/config"
 )
 
 var (
@@ -20,20 +22,9 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "patchmon-agent",
 	Short: "PatchMon Agent for package monitoring",
-	Long: `PatchMon Agent v` + config.AgentVersion + `
+	Long: `PatchMon Agent v` + version.Version + `
 
-A monitoring agent that sends package update information to PatchMon.
-
-Commands:
-  configure     Configure API credentials for this host
-  update        Send package update information to server
-  ping          Test connectivity and credentials
-  config        Show current configuration
-  check-version Check for agent updates
-  update-agent  Update agent to latest version
-  update-crontab Update crontab with current policy
-  diagnostics   Show detailed system diagnostics
-  uninstall     Uninstall the PatchMon agent`,
+A monitoring agent that sends package update information to PatchMon.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		initialiseAgent()
 	},

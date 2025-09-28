@@ -5,12 +5,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/viper"
 	"patchmon-agent/pkg/models"
+
+	"github.com/spf13/viper"
 )
 
 const (
-	AgentVersion           = "2.0.0"
 	DefaultAPIVersion      = "v1"
 	DefaultConfigFile      = "/etc/patchmon/agent.yml"
 	DefaultCredentialsFile = "/etc/patchmon/credentials.yml"
