@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"patchmon-agent/internal/config"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Manager handles crontab operations
@@ -73,6 +74,20 @@ func (m *Manager) GetEntry() string {
 		}
 	}
 	return ""
+}
+
+// GetSchedule returns the schedule part (first 5 fields) of the current cron entry.
+// Returns empty string if no valid entry is found.
+func (m *Manager) GetSchedule() string {
+	entry := m.GetEntry()
+	if entry == "" {
+		return ""
+	}
+	fields := strings.Fields(entry)
+	if len(fields) < 5 {
+		return ""
+	}
+	return strings.Join(fields[:5], " ")
 }
 
 // Remove removes the PatchMon agent's cron file
