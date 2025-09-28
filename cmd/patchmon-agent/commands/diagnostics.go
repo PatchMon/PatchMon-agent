@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 
@@ -28,107 +27,85 @@ var diagnosticsCmd = &cobra.Command{
 func showDiagnostics() error {
 	cfg := cfgManager.GetConfig()
 
-	fmt.Printf("PatchMon Agent Diagnostics v%s\n", version.Version)
-	fmt.Printf("=====================================\n\n")
+	fmt.Printf("PatchMon Agent Diagnostics v%s\n\n", version.Version)
 
 	// System Information
-	fmt.Printf("=== System Information ===\n")
-	fmt.Printf("OS: %s\n", runtime.GOOS)
-	fmt.Printf("Architecture: %s\n", runtime.GOARCH)
+	fmt.Printf("System Information:\n")
+	fmt.Printf("  OS: %s\n", runtime.GOOS)
+	fmt.Printf("  Architecture: %s\n", runtime.GOARCH)
 
 	if kernelVersion, err := utils.GetKernelVersion(); err == nil {
-		fmt.Printf("Kernel: %s\n", kernelVersion)
+		fmt.Printf("  Kernel: %s\n", kernelVersion)
 	}
 
 	if hostname, err := os.Hostname(); err == nil {
-		fmt.Printf("Hostname: %s\n", hostname)
+		fmt.Printf("  Hostname: %s\n", hostname)
 	}
 
 	fmt.Printf("\n")
 
 	// Agent Information
-	fmt.Printf("=== Agent Information ===\n")
-	fmt.Printf("Version: %s\n", version.Version)
-
-	if execPath, err := os.Executable(); err == nil {
-		fmt.Printf("Executable Path: %s\n", execPath)
-
-		if stat, err := os.Stat(execPath); err == nil {
-			fmt.Printf("Executable Size: %d bytes\n", stat.Size())
-			fmt.Printf("Last Modified: %s\n", stat.ModTime().Format(time.RFC3339))
-		}
-	}
-
-	fmt.Printf("Config File: %s\n", cfgManager.GetConfigFile())
-	fmt.Printf("Credentials File: %s\n", cfg.CredentialsFile)
-	fmt.Printf("Log File: %s\n", cfg.LogFile)
-	fmt.Printf("Log Level: %s\n", cfg.LogLevel)
+	fmt.Printf("Agent Information:\n")
+	fmt.Printf("  Version: %s\n", version.Version)
+	fmt.Printf("  Config File: %s\n", cfgManager.GetConfigFile())
+	fmt.Printf("  Credentials File: %s\n", cfg.CredentialsFile)
+	fmt.Printf("  Log File: %s\n", cfg.LogFile)
+	fmt.Printf("  Log Level: %s\n", cfg.LogLevel)
 	fmt.Printf("\n")
 
 	// Configuration Status
-	fmt.Printf("=== Configuration Status ===\n")
+	fmt.Printf("Configuration Status:\n")
 	configFile := cfgManager.GetConfigFile()
 	if _, err := os.Stat(configFile); err == nil {
-		fmt.Printf("Config file exists: Yes\n")
-		if stat, err := os.Stat(configFile); err == nil {
-			fmt.Printf("Config file size: %d bytes\n", stat.Size())
-		}
+		fmt.Printf("  ✅ Config file exists\n")
 	} else {
-		fmt.Printf("Config file exists: No (using defaults)\n")
+		fmt.Printf("  ❌ Config file not found (using defaults)\n")
 	}
-	fmt.Printf("\n")
-
-	// Credentials Status
-	fmt.Printf("=== Credentials Status ===\n")
-	if stat, err := os.Stat(cfg.CredentialsFile); err == nil {
-		fmt.Printf("Credentials file exists: Yes\n")
-		fmt.Printf("File size: %d bytes\n", stat.Size())
-		fmt.Printf("File permissions: %o\n", stat.Mode().Perm())
+	if _, err := os.Stat(cfg.CredentialsFile); err == nil {
+		fmt.Printf("  ✅ Credentials file exists\n")
 	} else {
-		fmt.Printf("Credentials file exists: No\n")
+		fmt.Printf("  ❌ Credentials file not found\n")
 	}
 	fmt.Printf("\n")
 
 	// Crontab Status
-	fmt.Printf("=== Crontab Status ===\n")
+	fmt.Printf("Crontab Status:\n")
 	cronManager := crontab.New(logger)
-	if crontabEntry := cronManager.GetEntry(); crontabEntry != "" {
-		fmt.Printf("Crontab entry:\n")
-		fmt.Printf("  %s\n", crontabEntry)
+	if crontabSchedule := cronManager.GetSchedule(); crontabSchedule != "" {
+		fmt.Printf("  ✅ Schedule installed: %s\n", crontabSchedule)
 	} else {
-		fmt.Printf("No crontab entries found\n")
+		fmt.Printf("  ❌ Schedule not installed\n")
 	}
 	fmt.Printf("\n")
 
 	// Network Connectivity & API Credentials
-	fmt.Printf("=== Network Connectivity & API Credentials ===\n")
-	fmt.Printf("Server URL: %s\n", cfg.PatchmonServer)
+	fmt.Printf("Network Connectivity & API Credentials:\n")
+	fmt.Printf("  Server URL: %s\n", cfg.PatchmonServer)
 
 	// Basic network connectivity test
 	serverHost, serverPort := extractUrlHostAndPort(cfg.PatchmonServer)
 	if isReachable := utils.TcpPing(serverHost, serverPort); isReachable {
-		fmt.Printf("Basic network connectivity: Yes\n")
+		fmt.Printf("  ✅ Server is reachable\n")
 	} else {
-		fmt.Printf("Basic network connectivity: No\n")
+		fmt.Printf("  ❌ Server is not reachable\n")
 	}
 
 	// API credentials and server connectivity test
 	if err := pingServer(); err != nil {
-		fmt.Printf("❌ Failed\n")
-		fmt.Printf("  Error: %v\n", err)
+		fmt.Printf("  ❌ API connectivity test failed: %v\n", err)
 	} else {
-		fmt.Printf("Server connectivity and API credentials validated.\n")
+		fmt.Printf("  ✅ API is reachable and credentials are valid\n")
 	}
 	fmt.Printf("\n")
 
 	// Recent Logs
-	fmt.Printf("=== Recent Logs (last 10 lines) ===\n")
+	fmt.Printf("Last 10 log entries:\n")
 	if logLines := getRecentLogs(cfg.LogFile); len(logLines) > 0 {
 		for _, line := range logLines {
-			fmt.Printf("%s\n", line)
+			fmt.Printf("  %s\n", line)
 		}
 	} else {
-		fmt.Printf("No recent logs found or log file does not exist\n")
+		fmt.Printf("  No recent logs found or log file does not exist.\n")
 	}
 
 	return nil
