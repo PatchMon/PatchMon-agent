@@ -154,26 +154,64 @@ func extractUrlHostAndPort(url string) (host string, port string) {
 	return host, port
 }
 
-func getRecentLogs(logFile string) []string {
-	var lines []string
-
+// getRecentLogs reads the last maxLines lines from the specified log file
+func getRecentLogs(logFile string) (lines []string) {
 	file, err := os.Open(logFile)
 	if err != nil {
 		return lines
 	}
 	defer file.Close()
 
-	// Read last 10 lines using tail-like approach
-	cmd := exec.Command("tail", "-10", logFile)
-	output, err := cmd.Output()
+	const maxLines = 10
+	const readBlockSize = 4096
+
+	stat, err := file.Stat()
 	if err != nil {
 		return lines
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	var (
+		size     = stat.Size()
+		buf      []byte
+		lineEnds []int
+	)
+
+	for offset := size; offset > 0 && len(lineEnds) <= maxLines; {
+		readSize := min(offset, int64(readBlockSize))
+		offset -= readSize
+
+		tmp := make([]byte, readSize)
+		_, err := file.ReadAt(tmp, offset)
+		if err != nil {
+			break
+		}
+		buf = append(tmp, buf...)
+
+		// Find newlines in the newly read block
+		for i := len(tmp) - 1; i >= 0; i-- {
+			if tmp[i] == '\n' {
+				lineEnds = append([]int{int(offset) + i + 1}, lineEnds...)
+				if len(lineEnds) > maxLines {
+					break
+				}
+			}
+		}
+	}
+
+	var start int64
+	if len(lineEnds) > maxLines {
+		start = int64(lineEnds[len(lineEnds)-maxLines-1])
+	} else {
+		start = 0
+	}
+
+	file.Seek(start, 0)
+	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
-
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
 	return lines
 }
