@@ -49,8 +49,10 @@ type PingResponse struct {
 
 // UpdateResponse represents server update response
 type UpdateResponse struct {
-	Success           bool               `json:"success"`
+	Message           string             `json:"message"`
 	PackagesProcessed int                `json:"packagesProcessed"`
+	UpdatesAvailable  int                `json:"updatesAvailable,omitempty"`
+	SecurityUpdates   int                `json:"securityUpdates,omitempty"`
 	AutoUpdate        *AutoUpdateInfo    `json:"autoUpdate,omitempty"`
 	CrontabUpdate     *CrontabUpdateInfo `json:"crontabUpdate,omitempty"`
 }

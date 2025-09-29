@@ -93,10 +93,6 @@ func (c *Client) SendUpdate(ctx context.Context, payload *models.UpdatePayload) 
 		return nil, fmt.Errorf("invalid response format")
 	}
 
-	if !result.Success {
-		return nil, fmt.Errorf("update failed: server returned success=false")
-	}
-
 	return result, nil
 }
 
