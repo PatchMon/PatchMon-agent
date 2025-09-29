@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-resty/resty/v2"
-	"github.com/sirupsen/logrus"
 	"patchmon-agent/internal/config"
 	"patchmon-agent/pkg/models"
+
+	"github.com/go-resty/resty/v2"
+	"github.com/sirupsen/logrus"
 )
 
 // Client handles HTTP communications with the PatchMon server
@@ -59,10 +60,6 @@ func (c *Client) Ping(ctx context.Context) (*models.PingResponse, error) {
 	result, ok := resp.Result().(*models.PingResponse)
 	if !ok {
 		return nil, fmt.Errorf("invalid response format")
-	}
-
-	if !result.Success {
-		return nil, fmt.Errorf("ping failed: server returned success=false")
 	}
 
 	return result, nil

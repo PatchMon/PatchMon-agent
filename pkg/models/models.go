@@ -41,11 +41,9 @@ type UpdatePayload struct {
 
 // PingResponse represents server ping response
 type PingResponse struct {
-	Success       bool               `json:"success"`
-	Hostname      string             `json:"hostname"`
-	ShouldUpdate  bool               `json:"shouldUpdate"`
 	Message       string             `json:"message"`
-	Command       string             `json:"command"`
+	Timestamp     string             `json:"timestamp"`
+	FriendlyName  string             `json:"friendlyName"`
 	CrontabUpdate *CrontabUpdateInfo `json:"crontabUpdate,omitempty"`
 }
 
