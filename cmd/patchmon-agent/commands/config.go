@@ -121,11 +121,14 @@ func configureCreds(apiID, apiKey, serverURL string) error {
 
 	// Test credentials
 	logger.Info("Testing connection...")
-	err := pingServer()
+	_, err := pingServer()
 	if err != nil {
 		logger.Errorf("Connection test failed: %v", err)
 		return err
 	}
+
+	logger.Info("✅ Connectivity test successful")
+	logger.Info("✅ API credentials are valid")
 
 	return nil
 }

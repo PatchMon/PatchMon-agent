@@ -91,7 +91,7 @@ func showDiagnostics() error {
 	}
 
 	// API credentials and server connectivity test
-	if err := pingServer(); err != nil {
+	if _, err := pingServer(); err != nil {
 		fmt.Printf("  ❌ API connectivity test failed: %v\n", err)
 	} else {
 		fmt.Printf("  ✅ API is reachable and credentials are valid\n")

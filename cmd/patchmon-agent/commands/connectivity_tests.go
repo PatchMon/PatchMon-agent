@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"patchmon-agent/internal/client"
+	"patchmon-agent/pkg/models"
 )
 
 // pingCmd represents the ping command
@@ -18,14 +19,22 @@ var pingCmd = &cobra.Command{
 			return err
 		}
 
-		return pingServer()
+		_, err := pingServer()
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("✅ API credentials are valid")
+		fmt.Println("✅ Connectivity test successful")
+		return nil
 	},
 }
 
-func pingServer() error {
+// pingServer tests connectivity to the server and validates credentials
+func pingServer() (*models.PingResponse, error) {
 	// Load credentials
 	if err := cfgManager.LoadCredentials(); err != nil {
-		return fmt.Errorf("failed to load credentials: %w", err)
+		return nil, fmt.Errorf("failed to load credentials: %w", err)
 	}
 
 	// Create client and ping
@@ -33,30 +42,8 @@ func pingServer() error {
 	ctx := context.Background()
 	response, err := httpClient.Ping(ctx)
 	if err != nil {
-		return fmt.Errorf("connectivity test failed: %w", err)
+		return nil, fmt.Errorf("connectivity test failed: %w", err)
 	}
 
-	logger.Info("✅ Connectivity test successful")
-	logger.Info("✅ API credentials are valid")
-	if response.Hostname != "" {
-		logger.Infof("Connected as host: %s", response.Hostname)
-	}
-
-	// Check for crontab update
-	if response.CrontabUpdate != nil && response.CrontabUpdate.ShouldUpdate {
-		if response.CrontabUpdate.Message != "" {
-			logger.Info(response.CrontabUpdate.Message)
-		}
-
-		if response.CrontabUpdate.Command == "update-crontab" {
-			logger.Info("Automatically updating crontab with new interval...")
-			if err := updateCrontabFromServer(); err != nil {
-				logger.Warnf("Crontab update failed, but ping was successful: %v", err)
-			} else {
-				logger.Info("Crontab updated successfully")
-			}
-		}
-	}
-
-	return nil
+	return response, nil
 }
