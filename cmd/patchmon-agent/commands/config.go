@@ -57,9 +57,13 @@ func init() {
 
 func showConfig() error {
 	cfg := cfgManager.GetConfig()
+	err := cfgManager.LoadCredentials()
+	if err != nil {
+		return fmt.Errorf("failed to load credentials: %w", err)
+	}
 	creds := cfgManager.GetCredentials()
 
-	fmt.Printf("Current Configuration:\n")
+	fmt.Printf("Configuration:\n")
 	if cfg.PatchmonServer != "" {
 		fmt.Printf("  Server: %s\n", cfg.PatchmonServer)
 	} else {
@@ -71,11 +75,14 @@ func showConfig() error {
 	fmt.Printf("  Log File: %s\n", cfg.LogFile)
 	fmt.Printf("  Log Level: %s\n", cfg.LogLevel)
 
+	fmt.Printf("\nCredentials:\n")
 	if creds != nil {
 		fmt.Printf("  API ID: %s\n", creds.APIID)
 		// Show only first 8 characters of API key for security
-		if len(creds.APIKey) >= 8 {
-			fmt.Printf("  API Key: %s...\n", creds.APIKey[:8])
+		if len(creds.APIKey) >= 0 {
+			fmt.Print("  API Key: Set ✅\n")
+		} else {
+			fmt.Print("  API Key: Not set ❌\n")
 		}
 	} else {
 		fmt.Printf("  Credentials: Not configured\n")
