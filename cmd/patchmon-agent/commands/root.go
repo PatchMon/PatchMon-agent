@@ -45,7 +45,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", logLevel, "log level (debug, info, warn, error)")
 
 	// Add all subcommands
-	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(pingCmd)
 	rootCmd.AddCommand(configCmd)
