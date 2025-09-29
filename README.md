@@ -50,7 +50,7 @@ PatchMon's monitoring agent sends package update information to the PatchMon ser
 
 2. **Test Configuration**:
    ```bash
-   sudo patchmon-agent test
+   sudo patchmon-agent ping
    ```
 
 3. **Send Initial Update**:
@@ -60,7 +60,7 @@ PatchMon's monitoring agent sends package update information to the PatchMon ser
 
 ### Configuration Files
 
-- **Main Config**: `/etc/patchmon/agent.yml` (YAML format)
+- **Main Config**: `/etc/patchmon/config.yml` (YAML format)
 - **Credentials**: `/etc/patchmon/credentials.yml` (YAML format, 600 permissions)
 - **Logs**: `/var/log/patchmon-agent.log`
 
@@ -90,7 +90,7 @@ sudo patchmon-agent diagnostics                                 # Show system di
 
 ### Example Configuration File
 
-Create `/etc/patchmon/agent.yml`:
+Create `/etc/patchmon/config.yml`:
 
 ```yaml
 patchmon_server: "https://patchmon.example.com"
@@ -180,24 +180,6 @@ The uninstall process will:
 5. Use a self-destruct mechanism to remove the main binary
 
 ## Development
-
-### Project Structure
-
-```
-├── cmd/patchmon-agent/          # Application entry point
-│   ├── main.go                  # Main function
-│   └── commands/                # CLI commands
-├── internal/                    # Internal packages
-│   ├── config/                  # Configuration management
-│   ├── client/                  # HTTP client for server communication
-│   ├── system/                  # System information detection
-│   ├── packages/                # Package management (APT/YUM)
-│   └── repositories/            # Repository information
-├── pkg/models/                  # Shared data models
-├── go.mod                       # Go module definition
-├── Makefile                     # Build automation
-└── README.md                    # This file
-```
 
 ### Building
 

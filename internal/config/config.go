@@ -12,7 +12,7 @@ import (
 
 const (
 	DefaultAPIVersion      = "v1"
-	DefaultConfigFile      = "/etc/patchmon/agent.yml"
+	DefaultConfigFile      = "/etc/patchmon/config.yml"
 	DefaultCredentialsFile = "/etc/patchmon/credentials.yml"
 	DefaultLogFile         = "/var/log/patchmon-agent.log"
 	DefaultLogLevel        = "info"
