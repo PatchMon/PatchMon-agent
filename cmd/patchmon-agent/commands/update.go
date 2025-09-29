@@ -122,8 +122,6 @@ func sendUpdate() error {
 			logger.Info("Automatically updating crontab with new interval...")
 			if err := updateCrontabFromServer(); err != nil {
 				logger.Warnf("Crontab update failed, but data was sent successfully: %v", err)
-			} else {
-				logger.Info("Crontab updated successfully")
 			}
 		}
 	}
