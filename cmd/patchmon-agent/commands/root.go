@@ -27,6 +27,7 @@ var rootCmd = &cobra.Command{
 A monitoring agent that sends package update information to PatchMon.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		initialiseAgent()
+		updateLogLevel(cmd)
 	},
 }
 
@@ -65,27 +66,41 @@ func initialiseAgent() {
 		TimestampFormat:  "2006-01-02T15:04:05",
 	})
 
-	// Set log level
-	level, err := logrus.ParseLevel(logLevel)
-	if err != nil {
-		level = logrus.InfoLevel
-	}
-	logger.SetLevel(level)
-
 	// Initialise configuration manager
 	cfgManager = config.New()
 	cfgManager.SetConfigFile(configFile)
-	cfgManager.GetConfig().LogLevel = logLevel
+}
 
-	// Load configuration
+// updateLogLevel sets the logger level based on the flag value
+func updateLogLevel(cmd *cobra.Command) {
+	// Load configuration first
 	if err := cfgManager.LoadConfig(); err != nil {
 		logger.Warnf("Failed to load config: %v", err)
 	}
 
-	// Update log level from config if it was loaded
-	if cfgManager.GetConfig().LogLevel != "" {
-		if level, err := logrus.ParseLevel(cfgManager.GetConfig().LogLevel); err == nil {
+	// Check if the log-level flag was explicitly set
+	flagLogLevel := logLevel
+	if cmd.Flag("log-level").Changed {
+		// Flag was explicitly set, use it
+		level, err := logrus.ParseLevel(flagLogLevel)
+		if err != nil {
+			level = logrus.InfoLevel
+		}
+		logger.SetLevel(level)
+		cfgManager.GetConfig().LogLevel = flagLogLevel
+	} else {
+		// Flag was not set, use config file value if available
+		configLogLevel := cfgManager.GetConfig().LogLevel
+		if configLogLevel != "" {
+			level, err := logrus.ParseLevel(configLogLevel)
+			if err != nil {
+				level = logrus.InfoLevel
+			}
 			logger.SetLevel(level)
+		} else {
+			// No config value either, use default
+			logger.SetLevel(logrus.InfoLevel)
+			cfgManager.GetConfig().LogLevel = "info"
 		}
 	}
 }
