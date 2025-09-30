@@ -26,8 +26,8 @@ type SystemInfo struct {
 	SELinuxStatus string `json:"selinuxStatus"`
 }
 
-// UpdatePayload represents the data sent to the server
-type UpdatePayload struct {
+// ReportPayload represents the data sent to the server
+type ReportPayload struct {
 	Packages      []Package    `json:"packages"`
 	Repositories  []Repository `json:"repositories"`
 	OSType        string       `json:"osType"`

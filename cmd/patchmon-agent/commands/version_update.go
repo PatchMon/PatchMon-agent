@@ -140,7 +140,7 @@ func updateAgent() error {
 
 	// Send updated information to PatchMon
 	logger.Info("Sending updated information to PatchMon...")
-	if err := sendUpdate(); err != nil {
+	if err := sendReport(); err != nil {
 		logger.Warnf("Failed to send updated information to PatchMon (this is not critical): %v", err)
 	} else {
 		logger.Info("Successfully sent updated information to PatchMon")

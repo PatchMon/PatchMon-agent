@@ -53,9 +53,9 @@ PatchMon's monitoring agent sends package update information to the PatchMon ser
    sudo patchmon-agent ping
    ```
 
-3. **Send Initial Update**:
+3. **Send Initial Report**:
    ```bash
-   sudo patchmon-agent update
+   sudo patchmon-agent report
    ```
 
 ### Configuration Files
@@ -74,8 +74,8 @@ sudo patchmon-agent configure <API_ID> <API_KEY> <SERVER_URL>     # Configure cr
 sudo patchmon-agent test                                          # Test credentials
 sudo patchmon-agent config                                        # Show current config
 
-# Data collection and updates
-sudo patchmon-agent update                                      # Send package information
+# Data collection and reporting
+sudo patchmon-agent report                                      # Report system & package status to server
 sudo patchmon-agent ping                                        # Test server connectivity
 
 # Agent management
@@ -122,11 +122,13 @@ sudo patchmon-agent update-crontab
 
 This creates entries like:
 ```bash
-# Hourly updates (at minute 15)
-15 * * * * /usr/local/bin/patchmon-agent update >/dev/null 2>&1
+# Hourly reports (at minute 15)
+15 * * * * /usr/local/bin/patchmon-agent report >/dev/null 2>&1
+15 * * * * /usr/local/bin/patchmon-agent update-crontab >/dev/null 2>&1
 
 # Or custom interval (every 30 minutes)
-*/30 * * * * /usr/local/bin/patchmon-agent update >/dev/null 2>&1
+*/30 * * * * /usr/local/bin/patchmon-agent report >/dev/null 2>&1
+*/30 * * * * /usr/local/bin/patchmon-agent update-crontab >/dev/null 2>&1
 ```
 
 ## Uninstallation

@@ -76,7 +76,7 @@ func (m *Manager) GetSchedule() string {
 	if len(entries) == 0 {
 		return ""
 	}
-	// Use the first entry (update entry) to extract schedule
+	// Use the first entry (report entry) to extract schedule
 	entry := entries[0]
 	if entry == "" {
 		return ""
@@ -102,7 +102,7 @@ func (m *Manager) Remove() error {
 	return nil
 }
 
-// generateCronEntries generates cron entries for both update and update-crontab commands
+// generateCronEntries generates cron entries for both report and update-crontab commands
 func (m *Manager) generateCronEntries(updateInterval int, executablePath string) []string {
 	var schedule string
 	
@@ -116,7 +116,7 @@ func (m *Manager) generateCronEntries(updateInterval int, executablePath string)
 	}
 
 	return []string{
-		fmt.Sprintf("%s root %s update >/dev/null 2>&1", schedule, executablePath),
+		fmt.Sprintf("%s root %s report >/dev/null 2>&1", schedule, executablePath),
 		fmt.Sprintf("%s root %s update-crontab >/dev/null 2>&1", schedule, executablePath),
 	}
 }

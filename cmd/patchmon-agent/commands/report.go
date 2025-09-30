@@ -14,22 +14,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// updateCmd represents the update command
-var updateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Send package update information to server",
-	Long:  "Collect and send package and system information to the PatchMon server.",
+// reportCmd represents the report command
+var reportCmd = &cobra.Command{
+	Use:   "report",
+	Short: "Report system and package information to server",
+	Long:  "Collect and report system, package, and repository information to the PatchMon server.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := checkRoot(); err != nil {
 			return err
 		}
 
-		return sendUpdate()
+		return sendReport()
 	},
 }
 
-func sendUpdate() error {
-	logger.Debug("Starting update process")
+func sendReport() error {
+	logger.Debug("Starting report process")
 
 	// Load credentials
 	if err := cfgManager.LoadCredentials(); err != nil {
@@ -108,7 +108,7 @@ func sendUpdate() error {
 	}
 
 	// Create payload
-	payload := &models.UpdatePayload{
+	payload := &models.ReportPayload{
 		Packages:      packageList,
 		Repositories:  repoList,
 		OSType:        osType,
@@ -120,19 +120,19 @@ func sendUpdate() error {
 		SELinuxStatus: systemInfo.SELinuxStatus,
 	}
 
-	// Send update
-	logger.Info("Sending update to PatchMon server...")
+	// Send report
+	logger.Info("Sending report to PatchMon server...")
 	httpClient := client.New(cfgManager, logger)
 	ctx := context.Background()
 	response, err := httpClient.SendUpdate(ctx, payload)
 	if err != nil {
-		return fmt.Errorf("failed to send update: %w", err)
+		return fmt.Errorf("failed to send report: %w", err)
 	}
 
-	logger.Info("Update sent successfully")
+	logger.Info("Report sent successfully")
 	logger.Infof("Processed %d packages", response.PackagesProcessed)
 
-	// Handle auto-update
+	// Handle agent auto-update
 	if response.AutoUpdate != nil && response.AutoUpdate.ShouldUpdate {
 		logger.Infof("PatchMon agent update detected: %s", response.AutoUpdate.Message)
 		logger.Infof("Current version: %s, Latest version: %s", response.AutoUpdate.CurrentVersion, response.AutoUpdate.LatestVersion)
@@ -145,6 +145,6 @@ func sendUpdate() error {
 		}
 	}
 
-	logger.Debug("Update process completed")
+	logger.Debug("Report process completed")
 	return nil
 }

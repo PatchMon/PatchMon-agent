@@ -24,7 +24,7 @@ var rootCmd = &cobra.Command{
 	Short: "PatchMon Agent for package monitoring",
 	Long: `PatchMon Agent v` + version.Version + `
 
-A monitoring agent that sends package update information to PatchMon.`,
+A monitoring agent that sends package information to PatchMon.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		initialiseAgent()
 		updateLogLevel(cmd)
@@ -46,7 +46,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", logLevel, "log level (debug, info, warn, error)")
 
 	// Add all subcommands
-	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(reportCmd)
 	rootCmd.AddCommand(pingCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(checkVersionCmd)

@@ -66,7 +66,7 @@ func (c *Client) Ping(ctx context.Context) (*models.PingResponse, error) {
 }
 
 // SendUpdate sends package update information to the server
-func (c *Client) SendUpdate(ctx context.Context, payload *models.UpdatePayload) (*models.UpdateResponse, error) {
+func (c *Client) SendUpdate(ctx context.Context, payload *models.ReportPayload) (*models.UpdateResponse, error) {
 	url := fmt.Sprintf("%s/api/%s/hosts/update", c.config.PatchmonServer, c.config.APIVersion)
 
 	c.logger.Debug("Sending update to server")
