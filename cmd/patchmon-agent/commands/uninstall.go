@@ -101,9 +101,9 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 
 	// Check for crontab entry
 	cronManager := crontab.New(logger)
-	crontabEntry := cronManager.GetEntry()
-	if crontabEntry != "" {
-		fmt.Printf("  - Crontab entry\n")
+	crontabEntries := cronManager.GetEntries()
+	if len(crontabEntries) > 0 {
+		fmt.Printf("  - Crontab entries (%d)\n", len(crontabEntries))
 	}
 
 	// Check for backup files
@@ -141,12 +141,12 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 	logger.Info("Starting uninstall process...")
 
 	// Remove crontab entry
-	if crontabEntry != "" {
-		logger.Info("Removing crontab entry...")
+	if len(crontabEntries) > 0 {
+		logger.Info("Removing crontab entries...")
 		if err := cronManager.Remove(); err != nil {
-			logger.Warnf("Failed to remove crontab entry: %v", err)
+			logger.Warnf("Failed to remove crontab entries: %v", err)
 		} else {
-			logger.Info("Crontab entry removed successfully")
+			logger.Info("Crontab entries removed successfully")
 		}
 	}
 

@@ -29,11 +29,11 @@ func (m *Manager) UpdateSchedule(updateInterval int, executablePath string) erro
 		return fmt.Errorf("invalid update interval: %d", updateInterval)
 	}
 
-	// Generate crontab entry
-	expectedEntry := m.generateCronEntry(updateInterval, executablePath)
+	// Generate crontab entries for both update and update-crontab
+	expectedEntries := m.generateCronEntries(updateInterval, executablePath)
 
-	// Check if current entry is up to date
-	if currentEntry := m.GetEntry(); currentEntry == expectedEntry {
+	// Check if current entries are up to date
+	if currentEntries := m.GetEntries(); m.entriesMatch(currentEntries, expectedEntries) {
 		m.logger.Infof("Crontab is already up to date (interval: %d minutes)", updateInterval)
 		return nil
 	}
@@ -41,7 +41,8 @@ func (m *Manager) UpdateSchedule(updateInterval int, executablePath string) erro
 	m.logger.Infof("Setting update interval to %d minutes", updateInterval)
 
 	// Write crontab file
-	if err := os.WriteFile(config.CronFilePath, []byte(expectedEntry+"\n"), 0644); err != nil {
+	content := strings.Join(expectedEntries, "\n") + "\n"
+	if err := os.WriteFile(config.CronFilePath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to update crontab file: %w", err)
 	}
 
@@ -49,8 +50,8 @@ func (m *Manager) UpdateSchedule(updateInterval int, executablePath string) erro
 	return nil
 }
 
-// GetEntry returns the current cron entry
-func (m *Manager) GetEntry() string {
+// GetEntries returns all current cron entries
+func (m *Manager) GetEntries() []string {
 	if data, err := os.ReadFile(config.CronFilePath); err == nil {
 		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 
@@ -63,23 +64,20 @@ func (m *Manager) GetEntry() string {
 			}
 		}
 
-		switch len(validLines) {
-		case 0:
-			return ""
-		case 1:
-			return validLines[0]
-		default:
-			m.logger.Warnf("Multiple cron entries found in %s, expected only one", config.CronFilePath)
-			return validLines[0]
-		}
+		return validLines
 	}
-	return ""
+	return []string{}
 }
 
 // GetSchedule returns the schedule part (first 5 fields) of the current cron entry.
 // Returns empty string if no valid entry is found.
 func (m *Manager) GetSchedule() string {
-	entry := m.GetEntry()
+	entries := m.GetEntries()
+	if len(entries) == 0 {
+		return ""
+	}
+	// Use the first entry (update entry) to extract schedule
+	entry := entries[0]
 	if entry == "" {
 		return ""
 	}
@@ -104,14 +102,36 @@ func (m *Manager) Remove() error {
 	return nil
 }
 
-// generateCronEntry generates a cron entry for the given interval and executable
-func (m *Manager) generateCronEntry(updateInterval int, executablePath string) string {
+// generateCronEntries generates cron entries for both update and update-crontab commands
+func (m *Manager) generateCronEntries(updateInterval int, executablePath string) []string {
+	var schedule string
+	
 	if updateInterval == 60 {
 		// Hourly updates - use current minute to spread load
 		currentMinute := time.Now().Minute()
-		return fmt.Sprintf("%d * * * * root %s update >/dev/null 2>&1", currentMinute, executablePath)
+		schedule = fmt.Sprintf("%d * * * *", currentMinute)
+	} else {
+		// Custom interval updates
+		schedule = fmt.Sprintf("*/%d * * * *", updateInterval)
 	}
 
-	// Custom interval updates
-	return fmt.Sprintf("*/%d * * * * root %s update >/dev/null 2>&1", updateInterval, executablePath)
+	return []string{
+		fmt.Sprintf("%s root %s update >/dev/null 2>&1", schedule, executablePath),
+		fmt.Sprintf("%s root %s update-crontab >/dev/null 2>&1", schedule, executablePath),
+	}
+}
+
+// entriesMatch compares two slices of cron entries for equality
+func (m *Manager) entriesMatch(current, expected []string) bool {
+	if len(current) != len(expected) {
+		return false
+	}
+	
+	for i := range current {
+		if current[i] != expected[i] {
+			return false
+		}
+	}
+	
+	return true
 }
