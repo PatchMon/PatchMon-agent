@@ -145,22 +145,6 @@ func sendUpdate() error {
 		}
 	}
 
-	// Handle crontab update
-	if response.CrontabUpdate != nil && response.CrontabUpdate.ShouldUpdate {
-		if response.CrontabUpdate.Message != "" {
-			logger.Info(response.CrontabUpdate.Message)
-		}
-
-		if response.CrontabUpdate.Command == "update-crontab" {
-			logger.Info("Automatically updating crontab with new interval...")
-			if err := updateCrontabFromServer(); err != nil {
-				logger.Warnf("Crontab update failed, but data was sent successfully: %v", err)
-			} else {
-				logger.Debug("Crontab update completed successfully")
-			}
-		}
-	}
-
 	logger.Debug("Update process completed")
 	return nil
 }
