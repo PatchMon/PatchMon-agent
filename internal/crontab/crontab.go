@@ -105,7 +105,7 @@ func (m *Manager) Remove() error {
 // generateCronEntries generates cron entries for both report and update-crontab commands
 func (m *Manager) generateCronEntries(updateInterval int, executablePath string) []string {
 	var schedule string
-	
+
 	if updateInterval == 60 {
 		// Hourly updates - use current minute to spread load
 		currentMinute := time.Now().Minute()
@@ -126,12 +126,12 @@ func (m *Manager) entriesMatch(current, expected []string) bool {
 	if len(current) != len(expected) {
 		return false
 	}
-	
+
 	for i := range current {
 		if current[i] != expected[i] {
 			return false
 		}
 	}
-	
+
 	return true
 }
