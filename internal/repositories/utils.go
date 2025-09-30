@@ -5,53 +5,44 @@ import (
 	"strings"
 )
 
-// generateRepoName generates a meaningful repository name
+// generateRepoName generates a meaningful repository name from URL and components
 func generateRepoName(url, distribution, components string) string {
-	// Extract meaningful name from URL
-	if strings.Contains(url, "archive.ubuntu.com") {
-		return fmt.Sprintf("ubuntu-%s", distribution)
-	}
-	if strings.Contains(url, "security.ubuntu.com") {
-		return fmt.Sprintf("ubuntu-%s-security", distribution)
-	}
-	if strings.Contains(url, "apt.pop-os.org/ubuntu") {
-		return fmt.Sprintf("pop-os-ubuntu-%s", distribution)
-	}
-	if strings.Contains(url, "apt.pop-os.org/release") {
-		return fmt.Sprintf("pop-os-release-%s", distribution)
-	}
-	if strings.Contains(url, "apt.pop-os.org/proprietary") {
-		return fmt.Sprintf("pop-os-apps-%s", distribution)
-	}
-	if strings.Contains(url, "deb.nodesource.com") {
-		return fmt.Sprintf("nodesource-%s", distribution)
-	}
-	if strings.Contains(url, "packages.microsoft.com") {
-		return fmt.Sprintf("microsoft-%s", distribution)
-	}
-	if strings.Contains(url, "download.docker.com") {
-		return fmt.Sprintf("docker-%s", distribution)
-	}
-
-	// Extract domain name as fallback
+	// Extract domain from URL
 	parts := strings.Split(url, "/")
-	if len(parts) >= 3 {
-		domain := strings.Split(parts[2], ":")[0] // Remove port if present
-		repoName := fmt.Sprintf("%s-%s", domain, distribution)
-
-		// Add component suffix if relevant
-		if strings.Contains(components, "security") && !strings.Contains(distribution, "security") {
-			repoName += "-security"
-		} else if strings.Contains(components, "updates") && !strings.Contains(distribution, "updates") {
-			repoName += "-updates"
-		} else if strings.Contains(components, "backports") && !strings.Contains(distribution, "backports") {
-			repoName += "-backports"
-		}
-
-		return repoName
+	if len(parts) < 3 {
+		return distribution // fallback
 	}
 
-	// Final fallback
-	return distribution
+	domain := strings.Split(parts[2], ":")[0] // Remove port if present
 
+	// Remove common prefixes and suffixes to clean up domain
+	domain = strings.TrimPrefix(domain, "www.")
+	domain = strings.TrimSuffix(domain, ".com")
+	domain = strings.TrimSuffix(domain, ".org")
+	domain = strings.TrimSuffix(domain, ".net")
+
+	// Build base name from domain and distribution
+	baseName := fmt.Sprintf("%s-%s", domain, distribution)
+
+	// Add component-specific suffixes for common cases
+	if components != "" {
+		if strings.Contains(components, "security") && !strings.Contains(baseName, "security") {
+			baseName += "-security"
+		} else if strings.Contains(components, "updates") && !strings.Contains(baseName, "updates") {
+			baseName += "-updates"
+		} else if strings.Contains(components, "backports") && !strings.Contains(baseName, "backports") {
+			baseName += "-backports"
+		} else if strings.Contains(components, "main") && strings.Contains(components, " ") {
+			// Multiple components, don't add suffix
+		} else if components != "main" && !strings.Contains(components, " ") {
+			// Single non-main component
+			baseName += fmt.Sprintf("-%s", components)
+		}
+	}
+
+	// Clean up the name
+	baseName = strings.ReplaceAll(baseName, ".", "-")
+	baseName = strings.ToLower(baseName)
+
+	return baseName
 }
