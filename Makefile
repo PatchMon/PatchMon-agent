@@ -62,7 +62,7 @@ fmt:
 .PHONY: lint
 lint:
 	@echo "Linting code..."
-	@golangci-lint run
+	@go golangci-lint run
 
 # Clean build artifacts
 .PHONY: clean
@@ -78,25 +78,18 @@ install: build
 	@sudo cp $(GOBIN)/$(BINARY_NAME) /usr/local/bin/
 	@sudo chmod +x /usr/local/bin/$(BINARY_NAME)
 
-# Development server (for testing)
-.PHONY: dev
-dev: build
-	@echo "Running in development mode..."
-	@./$(BUILD_DIR)/$(BINARY_NAME) --log-level debug
-
 # Show help
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  build        Build the application"
-	@echo "  build-all    Build for multiple architectures"
-	@echo "  deps         Install dependencies"
-	@echo "  test         Run tests"
+	@echo "  build         Build the application"
+	@echo "  build-all     Build for multiple architectures"
+	@echo "  deps          Install dependencies"
+	@echo "  test          Run tests"
 	@echo "  test-coverage Run tests with coverage"
-	@echo "  fmt          Format code"
-	@echo "  lint         Lint code"
-	@echo "  clean        Clean build artifacts"
-	@echo "  install      Install binary to /usr/local/bin"
-	@echo "  dev          Run in development mode"
-	@echo "  help         Show this help message"
+	@echo "  fmt           Format code"
+	@echo "  lint          Lint code"
+	@echo "  clean         Clean build artifacts"
+	@echo "  install       Install binary to /usr/local/bin"
+	@echo "  help          Show this help message"
 	@echo ""
