@@ -29,8 +29,11 @@ var updateCmd = &cobra.Command{
 }
 
 func sendUpdate() error {
+	logger.Debug("Starting update process")
+
 	// Load credentials
 	if err := cfgManager.LoadCredentials(); err != nil {
+		logger.Debugf("Failed to load credentials: %v", err)
 		return err
 	}
 
@@ -56,6 +59,8 @@ func sendUpdate() error {
 
 	architecture := systemDetector.GetArchitecture()
 	systemInfo := systemDetector.GetSystemInfo()
+	logger.Debugf("System info - Hostname: %s, Architecture: %s, Kernel: %s",
+		hostname, architecture, systemInfo.KernelVersion)
 
 	// Get package information
 	logger.Info("Collecting package information...")
@@ -63,7 +68,31 @@ func sendUpdate() error {
 	if err != nil {
 		return fmt.Errorf("failed to get packages: %w", err)
 	}
-	logger.Infof("Found %d packages", len(packageList))
+
+	// Count packages for debug logging
+	needsUpdateCount := 0
+	securityUpdateCount := 0
+	for _, pkg := range packageList {
+		if pkg.NeedsUpdate {
+			needsUpdateCount++
+		}
+		if pkg.IsSecurityUpdate {
+			securityUpdateCount++
+		}
+	}
+	logger.Infof("Found %d packages:", len(packageList))
+	for _, pkg := range packageList {
+		updateMsg := ""
+		if pkg.NeedsUpdate {
+			updateMsg = "update available"
+		} else {
+			updateMsg = "latest"
+		}
+		logger.Debugf("Package: %s - %s (%s)",
+			pkg.Name, pkg.CurrentVersion, updateMsg)
+	}
+	logger.Debugf("Package breakdown - Updates available: %d, Security updates: %d",
+		needsUpdateCount, securityUpdateCount)
 
 	// Get repository information
 	logger.Info("Collecting repository information...")
@@ -72,7 +101,11 @@ func sendUpdate() error {
 		logger.Warnf("Failed to get repositories: %v", err)
 		repoList = []models.Repository{}
 	}
-	logger.Infof("Found %d repositories", len(repoList))
+	logger.Infof("Found %d repositories:", len(repoList))
+	for _, repo := range repoList {
+		logger.Debugf("Repository: %s, Type: %s, URL: %s, Enabled: %t",
+			repo.Name, repo.RepoType, repo.URL, repo.IsEnabled)
+	}
 
 	// Create payload
 	payload := &models.UpdatePayload{
@@ -122,9 +155,12 @@ func sendUpdate() error {
 			logger.Info("Automatically updating crontab with new interval...")
 			if err := updateCrontabFromServer(); err != nil {
 				logger.Warnf("Crontab update failed, but data was sent successfully: %v", err)
+			} else {
+				logger.Debug("Crontab update completed successfully")
 			}
 		}
 	}
 
+	logger.Debug("Update process completed")
 	return nil
 }

@@ -49,21 +49,28 @@ func (m *DNFManager) GetPackages() ([]models.Package, error) {
 	checkOutput, _ := checkCmd.Output() // This command returns exit code 100 when updates are available
 
 	if len(checkOutput) > 0 {
+		m.logger.Debug("Parsing DNF/yum check-update output...")
 		upgradablePackages := m.parseDnfCheckUpdate(string(checkOutput), packageManager)
+		m.logger.Debugf("Found %d upgradable packages", len(upgradablePackages))
 		packages = append(packages, upgradablePackages...)
+	} else {
+		m.logger.Debug("No updates available")
 	}
 
-	// Get some installed packages (limited to avoid huge payloads)
+	// Get installed packages
 	m.logger.Debug("Getting installed packages...")
 	listCmd := exec.Command(packageManager, "list", "installed")
 	listOutput, err := listCmd.Output()
 	if err != nil {
 		m.logger.Warnf("Failed to get installed packages: %v", err)
 	} else {
+		m.logger.Debug("Parsing installed packages...")
 		installedPackages := m.parseDnfList(string(listOutput), packages)
+		m.logger.Debugf("Found %d installed packages", len(installedPackages))
 		packages = append(packages, installedPackages...)
 	}
 
+	m.logger.Debugf("Total packages collected: %d", len(packages))
 	return packages, nil
 }
 

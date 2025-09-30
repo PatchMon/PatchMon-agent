@@ -56,7 +56,9 @@ func (m *APTManager) GetPackages() ([]models.Package, error) {
 	if err != nil {
 		m.logger.Warnf("Failed to get upgrade simulation: %v", err)
 	} else {
+		m.logger.Debug("Parsing apt upgrade simulation output...")
 		upgradablePackages := m.parseAPTUpgrade(string(upgradeOutput))
+		m.logger.Debugf("Found %d upgradable packages", len(upgradablePackages))
 		packages = append(packages, upgradablePackages...)
 	}
 
@@ -67,10 +69,13 @@ func (m *APTManager) GetPackages() ([]models.Package, error) {
 	if err != nil {
 		m.logger.Warnf("Failed to get installed packages: %v", err)
 	} else {
+		m.logger.Debug("Parsing installed packages...")
 		installedPackages := m.parseInstalledPackages(string(installedOutput), packages)
+		m.logger.Debugf("Found %d installed packages", len(installedPackages))
 		packages = append(packages, installedPackages...)
 	}
 
+	m.logger.Debugf("Total packages collected: %d", len(packages))
 	return packages, nil
 }
 

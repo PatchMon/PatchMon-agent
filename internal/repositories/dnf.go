@@ -27,21 +27,26 @@ func NewDNFManager(logger *logrus.Logger) *DNFManager {
 func (d *DNFManager) GetRepositories() []models.Repository {
 	var repositories []models.Repository
 
+	d.logger.Debug("Searching for RPM repository files...")
 	repoFiles, err := d.findRepoFiles()
 	if err != nil {
 		d.logger.WithError(err).Error("Failed to find repository files")
 		return repositories
 	}
+	d.logger.Debugf("Found %d repo files", len(repoFiles))
 
 	for _, file := range repoFiles {
+		d.logger.Debugf("Parsing repository file: %s", file)
 		repos, err := d.parseRepoFile(file)
 		if err != nil {
 			d.logger.WithError(err).WithField("file", file).Error("Failed to parse repository file")
 			continue
 		}
+		d.logger.Debugf("Extracted %d repositories from %s", len(repos), file)
 		repositories = append(repositories, repos...)
 	}
 
+	d.logger.Debugf("Total repositories collected: %d", len(repositories))
 	return repositories
 }
 
@@ -54,11 +59,13 @@ func (d *DNFManager) findRepoFiles() ([]string, error) {
 	}
 
 	for _, path := range searchPaths {
+		d.logger.Debugf("Searching for repo files in: %s", path)
 		files, err := filepath.Glob(filepath.Join(path, "*.repo"))
 		if err != nil {
 			d.logger.WithError(err).WithField("path", path).Warn("Failed to search for repo files")
 			continue
 		}
+		d.logger.Debugf("Found %d repo files in %s", len(files), path)
 		repoFiles = append(repoFiles, files...)
 	}
 

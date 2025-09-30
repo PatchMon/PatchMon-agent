@@ -29,43 +29,49 @@ func (m *APTManager) GetRepositories() ([]models.Repository, error) {
 	var repositories []models.Repository
 
 	// Find repository files
-	listFiles, err := m.findListFiles()
+	m.logger.Debug("Discovering package repositories...")
+	aptSrcFiles, err := m.findAptListFiles()
 	if err != nil {
-		m.logger.WithError(err).Error("Failed to find list files")
+		m.logger.WithError(err).Error("Failed to find apt list files")
 		return repositories, err
 	}
+	m.logger.Debugf("Found %d apt list files", len(aptSrcFiles))
 
-	sourcesFiles, err := m.findSourcesFiles()
+	sourcesFiles, err := m.findDeb822SourcesFiles()
 	if err != nil {
-		m.logger.WithError(err).Error("Failed to find sources files")
+		m.logger.WithError(err).Error("Failed to find deb822 sources files")
 		return repositories, err
 	}
+	m.logger.Debugf("Found %d deb822 sources files", len(sourcesFiles))
 
-	// Parse .list files
-	for _, file := range listFiles {
+	// Parse apt list files
+	for _, file := range aptSrcFiles {
+		m.logger.Debugf("Parsing apt list file: %s", file)
 		repos, err := m.parseSourcesList(file)
 		if err != nil {
 			m.logger.Warnf("Error parsing %s: %v", file, err)
 			continue
 		}
+		m.logger.Debugf("Extracted %d repositories from %s", len(repos), file)
 		repositories = append(repositories, repos...)
 	}
 
 	// Parse modern DEB822 format (.sources files)
 	for _, file := range sourcesFiles {
+		m.logger.Debugf("Parsing deb822 sources file: %s", file)
 		repos, err := m.parseDEB822Sources(file)
 		if err != nil {
 			m.logger.Warnf("Error parsing %s: %v", file, err)
 			continue
 		}
+		m.logger.Debugf("Extracted %d repositories from %s", len(repos), file)
 		repositories = append(repositories, repos...)
 	}
-
 	return repositories, nil
 }
 
-// findListFiles finds all .list files in common locations
-func (m *APTManager) findListFiles() ([]string, error) {
+// findAptListFiles finds all apt list files in common locations
+func (m *APTManager) findAptListFiles() ([]string, error) {
 	var listFiles []string
 
 	// Add main sources.list file
@@ -91,8 +97,8 @@ func (m *APTManager) findListFiles() ([]string, error) {
 	return listFiles, nil
 }
 
-// findSourcesFiles finds all .sources files in common locations
-func (m *APTManager) findSourcesFiles() ([]string, error) {
+// findDeb822SourcesFiles finds all Deb822 .sources files in common locations
+func (m *APTManager) findDeb822SourcesFiles() ([]string, error) {
 	var sourcesFiles []string
 
 	// Add .sources files from sources.list.d
