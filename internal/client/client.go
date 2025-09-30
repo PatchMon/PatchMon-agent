@@ -157,6 +157,9 @@ func (c *Client) GetUpdateInterval(ctx context.Context) (*models.UpdateIntervalR
 
 	resp, err := c.client.R().
 		SetContext(ctx).
+		SetHeader("Content-Type", "application/json").
+		SetHeader("X-API-ID", c.credentials.APIID).
+		SetHeader("X-API-KEY", c.credentials.APIKey).
 		SetResult(&models.UpdateIntervalResponse{}).
 		Get(url)
 
