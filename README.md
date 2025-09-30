@@ -1,6 +1,6 @@
 # PatchMon Agent
 
-PatchMon's monitoring agent sends package update information to the PatchMon server using API credentials for authentication.
+PatchMon's monitoring agent sends package and repository information to the PatchMon server.
 
 ## Features
 
