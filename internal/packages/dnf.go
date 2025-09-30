@@ -35,47 +35,50 @@ func (m *DNFManager) detectPackageManager() string {
 }
 
 // GetPackages gets package information for RHEL-based systems
-func (m *DNFManager) GetPackages() ([]models.Package, error) {
-	var packages []models.Package
-
+func (m *DNFManager) GetPackages() []models.Package {
 	// Determine package manager
 	packageManager := m.detectPackageManager()
 
 	m.logger.Debugf("Using package manager: %s", packageManager)
+
+	// Get installed packages
+	m.logger.Debug("Getting installed packages...")
+	listCmd := exec.Command(packageManager, "list", "installed")
+	listOutput, err := listCmd.Output()
+	var installedPackages map[string]string
+	if err != nil {
+		m.logger.Warnf("Failed to get installed packages: %v", err)
+		installedPackages = make(map[string]string)
+	} else {
+		m.logger.Debug("Parsing installed packages...")
+		installedPackages = m.parseInstalledPackages(string(listOutput))
+		m.logger.Debugf("Found %d installed packages", len(installedPackages))
+	}
 
 	// Get upgradable packages
 	m.logger.Debug("Getting upgradable packages...")
 	checkCmd := exec.Command(packageManager, "check-update")
 	checkOutput, _ := checkCmd.Output() // This command returns exit code 100 when updates are available
 
+	var upgradablePackages []models.Package
 	if len(checkOutput) > 0 {
 		m.logger.Debug("Parsing DNF/yum check-update output...")
-		upgradablePackages := m.parseDnfCheckUpdate(string(checkOutput), packageManager)
+		upgradablePackages = m.parseUpgradablePackages(string(checkOutput), packageManager)
 		m.logger.Debugf("Found %d upgradable packages", len(upgradablePackages))
-		packages = append(packages, upgradablePackages...)
 	} else {
 		m.logger.Debug("No updates available")
+		upgradablePackages = []models.Package{}
 	}
 
-	// Get installed packages
-	m.logger.Debug("Getting installed packages...")
-	listCmd := exec.Command(packageManager, "list", "installed")
-	listOutput, err := listCmd.Output()
-	if err != nil {
-		m.logger.Warnf("Failed to get installed packages: %v", err)
-	} else {
-		m.logger.Debug("Parsing installed packages...")
-		installedPackages := m.parseDnfList(string(listOutput), packages)
-		m.logger.Debugf("Found %d installed packages", len(installedPackages))
-		packages = append(packages, installedPackages...)
-	}
-
+	// Merge and deduplicate packages
+	packages := CombinePackageData(installedPackages, upgradablePackages)
 	m.logger.Debugf("Total packages collected: %d", len(packages))
-	return packages, nil
+
+	return packages
 }
 
-// parseDnfCheckUpdate parses dnf/yum check-update output
-func (m *DNFManager) parseDnfCheckUpdate(output string, packageManager string) []models.Package {
+// parseUpgradablePackages parses dnf/yum check-update output
+func (m *DNFManager) parseUpgradablePackages(output string, packageManager string) []models.Package {
 	var packages []models.Package
 
 	scanner := bufio.NewScanner(strings.NewReader(output))
@@ -127,15 +130,9 @@ func (m *DNFManager) parseDnfCheckUpdate(output string, packageManager string) [
 	return packages
 }
 
-// parseDnfList parses dnf/yum list installed output
-func (m *DNFManager) parseDnfList(output string, upgradablePackages []models.Package) []models.Package {
-	var packages []models.Package
-
-	// Create a map of upgradable packages for quick lookup
-	upgradableMap := make(map[string]bool)
-	for _, pkg := range upgradablePackages {
-		upgradableMap[pkg.Name] = true
-	}
+// parseInstalledPackages parses dnf/yum list installed output and returns a map of package name to version
+func (m *DNFManager) parseInstalledPackages(output string) map[string]string {
+	installedPackages := make(map[string]string)
 
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
@@ -154,19 +151,8 @@ func (m *DNFManager) parseDnfList(output string, upgradablePackages []models.Pac
 
 		packageName := fields[0]
 		version := fields[1]
-
-		// Skip if already in upgradable list
-		if upgradableMap[packageName] {
-			continue
-		}
-
-		packages = append(packages, models.Package{
-			Name:             packageName,
-			CurrentVersion:   version,
-			NeedsUpdate:      false,
-			IsSecurityUpdate: false,
-		})
+		installedPackages[packageName] = version
 	}
 
-	return packages
+	return installedPackages
 }

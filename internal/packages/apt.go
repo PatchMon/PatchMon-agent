@@ -34,9 +34,7 @@ func (m *APTManager) detectPackageManager() string {
 }
 
 // GetPackages gets package information for APT-based systems
-func (m *APTManager) GetPackages() ([]models.Package, error) {
-	var packages []models.Package
-
+func (m *APTManager) GetPackages() []models.Package {
 	// Determine package manager
 	packageManager := m.detectPackageManager()
 
@@ -48,35 +46,39 @@ func (m *APTManager) GetPackages() ([]models.Package, error) {
 		m.logger.Warnf("Failed to update package lists: %v", err)
 	}
 
-	// Get upgradable packages using simulation
+	// Get installed packages
+	m.logger.Debug("Getting installed packages...")
+	installedCmd := exec.Command("dpkg-query", "-W", "-f", "${Package} ${Version}\n")
+	installedOutput, err := installedCmd.Output()
+	var installedPackages map[string]string
+	if err != nil {
+		m.logger.Warnf("Failed to get installed packages: %v", err)
+		installedPackages = make(map[string]string)
+	} else {
+		m.logger.Debug("Parsing installed packages...")
+		installedPackages = m.parseInstalledPackages(string(installedOutput))
+		m.logger.Debugf("Found %d installed packages", len(installedPackages))
+	}
+
+	// Get upgradable packages using apt simulation
 	m.logger.Debug("Getting upgradable packages...")
 	upgradeCmd := exec.Command(packageManager, "-s", "-o", "Debug::NoLocking=1", "upgrade")
 
 	upgradeOutput, err := upgradeCmd.Output()
+	var upgradablePackages []models.Package
 	if err != nil {
 		m.logger.Warnf("Failed to get upgrade simulation: %v", err)
+		upgradablePackages = []models.Package{}
 	} else {
 		m.logger.Debug("Parsing apt upgrade simulation output...")
-		upgradablePackages := m.parseAPTUpgrade(string(upgradeOutput))
+		upgradablePackages = m.parseAPTUpgrade(string(upgradeOutput))
 		m.logger.Debugf("Found %d upgradable packages", len(upgradablePackages))
-		packages = append(packages, upgradablePackages...)
 	}
 
-	// Get installed packages that are up to date
-	m.logger.Debug("Getting installed packages...")
-	installedCmd := exec.Command("dpkg-query", "-W", "-f", "${Package} ${Version}\n")
-	installedOutput, err := installedCmd.Output()
-	if err != nil {
-		m.logger.Warnf("Failed to get installed packages: %v", err)
-	} else {
-		m.logger.Debug("Parsing installed packages...")
-		installedPackages := m.parseInstalledPackages(string(installedOutput), packages)
-		m.logger.Debugf("Found %d installed packages", len(installedPackages))
-		packages = append(packages, installedPackages...)
-	}
+	// Merge and deduplicate packages
+	packages := CombinePackageData(installedPackages, upgradablePackages)
 
-	m.logger.Debugf("Total packages collected: %d", len(packages))
-	return packages, nil
+	return packages
 }
 
 // parseAPTUpgrade parses apt/apt-get upgrade simulation output
@@ -148,15 +150,9 @@ func (m *APTManager) parseAPTUpgrade(output string) []models.Package {
 	return packages
 }
 
-// parseInstalledPackages parses dpkg-query output for installed packages
-func (m *APTManager) parseInstalledPackages(output string, upgradablePackages []models.Package) []models.Package {
-	var packages []models.Package
-
-	// Create a map of upgradable packages for quick lookup
-	upgradableMap := make(map[string]bool)
-	for _, pkg := range upgradablePackages {
-		upgradableMap[pkg.Name] = true
-	}
+// parseInstalledPackages parses dpkg-query output and returns a map of package name to version
+func (m *APTManager) parseInstalledPackages(output string) map[string]string {
+	installedPackages := make(map[string]string)
 
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
@@ -172,19 +168,8 @@ func (m *APTManager) parseInstalledPackages(output string, upgradablePackages []
 
 		packageName := parts[0]
 		version := parts[1]
-
-		// Skip if already in upgradable list
-		if upgradableMap[packageName] {
-			continue
-		}
-
-		packages = append(packages, models.Package{
-			Name:             packageName,
-			CurrentVersion:   version,
-			NeedsUpdate:      false,
-			IsSecurityUpdate: false,
-		})
+		installedPackages[packageName] = version
 	}
 
-	return packages
+	return installedPackages
 }
