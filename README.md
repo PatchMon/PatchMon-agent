@@ -70,9 +70,9 @@ PatchMon's monitoring agent sends package and repository information to the Patc
 
 ```bash
 # Configuration and setup
-sudo patchmon-agent configure <API_ID> <API_KEY> <SERVER_URL>     # Configure credentials
-sudo patchmon-agent test                                          # Test credentials
-sudo patchmon-agent config                                        # Show current config
+sudo patchmon-agent configure <API_ID> <API_KEY> <SERVER_URL>   # Configure credentials
+sudo patchmon-agent test                                        # Test credentials
+sudo patchmon-agent config                                      # Show current config
 
 # Data collection and reporting
 sudo patchmon-agent report                                      # Report system & package status to server
@@ -181,40 +181,6 @@ The uninstall process will:
 4. Remove additional files and binaries
 5. Use a self-destruct mechanism to remove the main binary
 
-## Development
-
-### Building
-
-```bash
-# Install dependencies
-make deps
-
-# Build for current platform
-make build
-
-# Build for all supported platforms
-make build-all
-
-# Run tests
-make test
-
-# Format and lint
-make fmt
-make lint
-```
-
-## Supported Operating Systems
-
-- **Ubuntu** (18.04+)
-- **Debian** (9+)
-- **CentOS** (7+)
-- **RHEL** (7+)
-- **Fedora** (30+)
-- **Pop!_OS**
-- **Linux Mint**
-- **Rocky Linux**
-- **AlmaLinux**
-
 ## Logging
 
 Logs are written to `/var/log/patchmon-agent.log` with timestamps and structured format:
@@ -266,14 +232,7 @@ Run comprehensive diagnostics:
 sudo patchmon-agent diagnostics
 ```
 
-This provides:
-- System information
-- Agent version and paths
-- Configuration status
-- Credentials status
-- Crontab entries
-- Network connectivity
-- Recent log entries
+This returns information about your system, the agent, the current configuration and server connectivity state, and more.
 
 ## Migration from Shell Script
 
@@ -288,6 +247,28 @@ To migrate:
 1. Remove the old shell script agent, config, credentials, and crontab.
 2. Install the Go binary as described above
 3. No changes needed to crontab or server settings
+
+## Development
+
+### Building
+
+```bash
+# Install dependencies
+make deps
+
+# Build for current platform
+make build
+
+# Build for all supported platforms
+make build-all
+
+# Run tests
+make test
+
+# Format and lint
+make fmt
+make lint
+```
 
 ## Contributing
 
