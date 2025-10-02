@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"patchmon-agent/internal/client"
+	"patchmon-agent/internal/hardware"
+	"patchmon-agent/internal/network"
 	"patchmon-agent/internal/packages"
 	"patchmon-agent/internal/repositories"
 	"patchmon-agent/internal/system"
@@ -31,7 +33,8 @@ var reportCmd = &cobra.Command{
 func sendReport() error {
 	logger.Debug("Starting report process")
 
-	// Load credentials
+	// Load API credentials to send report
+	logger.Debug("Loading API credentials")
 	if err := cfgManager.LoadCredentials(); err != nil {
 		logger.Debugf("Failed to load credentials: %v", err)
 		return err
@@ -41,6 +44,8 @@ func sendReport() error {
 	systemDetector := system.New(logger)
 	packageMgr := packages.New(logger)
 	repoMgr := repositories.New(logger)
+	hardwareMgr := hardware.New(logger)
+	networkMgr := network.New(logger)
 
 	// Detect OS
 	logger.Info("Detecting operating system...")
@@ -59,8 +64,17 @@ func sendReport() error {
 
 	architecture := systemDetector.GetArchitecture()
 	systemInfo := systemDetector.GetSystemInfo()
+	ipAddress := systemDetector.GetIPAddress()
 	logger.Debugf("System info - Hostname: %s, Architecture: %s, Kernel: %s",
 		hostname, architecture, systemInfo.KernelVersion)
+
+	// Get hardware information
+	logger.Info("Collecting hardware information...")
+	hardwareInfo := hardwareMgr.GetHardwareInfo()
+
+	// Get network information
+	logger.Info("Collecting network information...")
+	networkInfo := networkMgr.GetNetworkInfo()
 
 	// Get package information
 	logger.Info("Collecting package information...")
@@ -109,15 +123,26 @@ func sendReport() error {
 
 	// Create payload
 	payload := &models.ReportPayload{
-		Packages:      packageList,
-		Repositories:  repoList,
-		OSType:        osType,
-		OSVersion:     osVersion,
-		Hostname:      hostname,
-		Architecture:  architecture,
-		AgentVersion:  version.Version,
-		KernelVersion: systemInfo.KernelVersion,
-		SELinuxStatus: systemInfo.SELinuxStatus,
+		Packages:          packageList,
+		Repositories:      repoList,
+		OSType:            osType,
+		OSVersion:         osVersion,
+		Hostname:          hostname,
+		IP:                ipAddress,
+		Architecture:      architecture,
+		AgentVersion:      version.Version,
+		KernelVersion:     systemInfo.KernelVersion,
+		SELinuxStatus:     systemInfo.SELinuxStatus,
+		SystemUptime:      systemInfo.SystemUptime,
+		LoadAverage:       systemInfo.LoadAverage,
+		CPUModel:          hardwareInfo.CPUModel,
+		CPUCores:          hardwareInfo.CPUCores,
+		RAMInstalled:      hardwareInfo.RAMInstalled,
+		SwapSize:          hardwareInfo.SwapSize,
+		DiskDetails:       hardwareInfo.DiskDetails,
+		GatewayIP:         networkInfo.GatewayIP,
+		DNSServers:        networkInfo.DNSServers,
+		NetworkInterfaces: networkInfo.NetworkInterfaces,
 	}
 
 	// Send report

@@ -22,21 +22,70 @@ type Repository struct {
 
 // SystemInfo represents system information
 type SystemInfo struct {
-	KernelVersion string `json:"kernelVersion"`
-	SELinuxStatus string `json:"selinuxStatus"`
+	KernelVersion string    `json:"kernelVersion"`
+	SELinuxStatus string    `json:"selinuxStatus"`
+	SystemUptime  string    `json:"systemUptime"`
+	LoadAverage   []float64 `json:"loadAverage"`
+}
+
+// HardwareInfo represents hardware information
+type HardwareInfo struct {
+	CPUModel     string     `json:"cpuModel"`
+	CPUCores     int        `json:"cpuCores"`
+	RAMInstalled float64    `json:"ramInstalled"` // GB
+	SwapSize     float64    `json:"swapSize"`     // GB
+	DiskDetails  []DiskInfo `json:"diskDetails"`
+}
+
+// DiskInfo represents disk information
+type DiskInfo struct {
+	Name       string `json:"name"`
+	Size       string `json:"size"`
+	MountPoint string `json:"mountpoint"`
+}
+
+// NetworkInfo represents network information
+type NetworkInfo struct {
+	GatewayIP         string             `json:"gatewayIp"`
+	DNSServers        []string           `json:"dnsServers"`
+	NetworkInterfaces []NetworkInterface `json:"networkInterfaces"`
+}
+
+// NetworkInterface represents a network interface
+type NetworkInterface struct {
+	Name      string           `json:"name"`
+	Type      string           `json:"type"`
+	Addresses []NetworkAddress `json:"addresses"`
+}
+
+// NetworkAddress represents an IP address
+type NetworkAddress struct {
+	Address string `json:"address"`
+	Family  string `json:"family"`
 }
 
 // ReportPayload represents the data sent to the server
 type ReportPayload struct {
-	Packages      []Package    `json:"packages"`
-	Repositories  []Repository `json:"repositories"`
-	OSType        string       `json:"osType"`
-	OSVersion     string       `json:"osVersion"`
-	Hostname      string       `json:"hostname"`
-	Architecture  string       `json:"architecture"`
-	AgentVersion  string       `json:"agentVersion"`
-	KernelVersion string       `json:"kernelVersion"`
-	SELinuxStatus string       `json:"selinuxStatus"`
+	Packages          []Package          `json:"packages"`
+	Repositories      []Repository       `json:"repositories"`
+	OSType            string             `json:"osType"`
+	OSVersion         string             `json:"osVersion"`
+	Hostname          string             `json:"hostname"`
+	IP                string             `json:"ip"`
+	Architecture      string             `json:"architecture"`
+	AgentVersion      string             `json:"agentVersion"`
+	KernelVersion     string             `json:"kernelVersion"`
+	SELinuxStatus     string             `json:"selinuxStatus"`
+	SystemUptime      string             `json:"systemUptime"`
+	LoadAverage       []float64          `json:"loadAverage"`
+	CPUModel          string             `json:"cpuModel"`
+	CPUCores          int                `json:"cpuCores"`
+	RAMInstalled      float64            `json:"ramInstalled"`
+	SwapSize          float64            `json:"swapSize"`
+	DiskDetails       []DiskInfo         `json:"diskDetails"`
+	GatewayIP         string             `json:"gatewayIp"`
+	DNSServers        []string           `json:"dnsServers"`
+	NetworkInterfaces []NetworkInterface `json:"networkInterfaces"`
 }
 
 // PingResponse represents server ping response
@@ -82,6 +131,19 @@ type VersionResponse struct {
 // UpdateIntervalResponse represents update interval response
 type UpdateIntervalResponse struct {
 	UpdateInterval int `json:"updateInterval"`
+}
+
+// AgentTimestampResponse represents agent timestamp response
+type AgentTimestampResponse struct {
+	Version   string `json:"version"`
+	Timestamp int64  `json:"timestamp"`
+	Exists    bool   `json:"exists"`
+}
+
+// HostSettingsResponse represents host settings response
+type HostSettingsResponse struct {
+	AutoUpdate     bool `json:"auto_update"`
+	HostAutoUpdate bool `json:"host_auto_update"`
 }
 
 // Credentials holds API authentication information

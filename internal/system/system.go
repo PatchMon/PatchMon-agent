@@ -2,13 +2,18 @@ package system
 
 import (
 	"bufio"
+	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
+	"time"
 
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/load"
 	"github.com/sirupsen/logrus"
+
 	"patchmon-agent/pkg/models"
 )
 
@@ -26,125 +31,184 @@ func New(logger *logrus.Logger) *Detector {
 
 // DetectOS detects the operating system and version
 func (d *Detector) DetectOS() (osType, osVersion string, err error) {
-	// Try /etc/os-release first (most common)
-	if data, err := os.ReadFile("/etc/os-release"); err == nil {
-		osInfo := parseOSRelease(string(data))
-		osType = strings.ToLower(osInfo["ID"])
-		osVersion = osInfo["VERSION_ID"]
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-		// Map OS variations to their appropriate categories
-		switch osType {
-		case "pop", "linuxmint", "elementary":
-			osType = "ubuntu"
-		case "rhel", "rocky", "almalinux", "centos":
-			osType = "rhel"
-		}
-
-		return osType, osVersion, nil
-	}
-
-	// Try /etc/redhat-release for older RHEL systems
-	if data, err := os.ReadFile("/etc/redhat-release"); err == nil {
-		content := string(data)
-		if strings.Contains(content, "CentOS") {
-			osType = "centos"
-		} else if strings.Contains(content, "Red Hat") {
-			osType = "rhel"
-		}
-
-		// Extract version using a simple approach
-		for field := range strings.FieldsSeq(content) {
-			if strings.Contains(field, ".") && len(field) <= 10 {
-				// Likely a version string
-				osVersion = field
-				break
-			}
-		}
-
-		return osType, osVersion, nil
-	}
-
-	return "", "", fmt.Errorf("unable to detect OS version")
-}
-
-// GetArchitecture returns the system architecture
-func (d *Detector) GetArchitecture() string {
-	return runtime.GOARCH
-}
-
-// GetHostname returns the system hostname
-func (d *Detector) GetHostname() (string, error) {
-	hostname, err := os.Hostname()
+	info, err := host.InfoWithContext(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get hostname: %w", err)
+		d.logger.Warnf("Failed to get host info: %v", err)
+		return "", "", err
 	}
-	return hostname, nil
+
+	osType = info.Platform
+	osVersion = info.PlatformVersion
+
+	// Map OS variations to their appropriate categories
+	switch osType {
+	case "pop", "linuxmint", "elementary":
+		osType = "ubuntu"
+	case "rhel", "rocky", "almalinux", "centos":
+		osType = "rhel"
+	}
+
+	return osType, osVersion, nil
 }
 
 // GetSystemInfo gets additional system information
-func (d *Detector) GetSystemInfo() *models.SystemInfo {
-	info := &models.SystemInfo{
-		SELinuxStatus: "disabled", // Default value
+func (d *Detector) GetSystemInfo() models.SystemInfo {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	d.logger.Debug("Beginning system information collection")
+
+	info := models.SystemInfo{
+		KernelVersion: d.getKernelVersion(ctx),
+		SELinuxStatus: d.getSELinuxStatus(),
+		SystemUptime:  d.getSystemUptime(ctx),
+		LoadAverage:   d.getLoadAverage(ctx),
 	}
 
-	// Get kernel version
-	if data, err := os.ReadFile("/proc/version"); err == nil {
-		fields := strings.Fields(string(data))
-		if len(fields) >= 3 {
-			info.KernelVersion = fields[2]
-		}
-	} else {
-		// Fallback to uname -r
-		if output, err := exec.Command("uname", "-r").Output(); err == nil {
-			info.KernelVersion = strings.TrimSpace(string(output))
-		}
-	}
-
-	// Get SELinux status
-	if output, err := exec.Command("getenforce").Output(); err == nil {
-		info.SELinuxStatus = strings.ToLower(strings.TrimSpace(string(output)))
-	} else if data, err := os.ReadFile("/etc/selinux/config"); err == nil {
-		// Parse config file
-		scanner := bufio.NewScanner(strings.NewReader(string(data)))
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if value, found := strings.CutPrefix(line, "SELINUX="); found {
-				info.SELinuxStatus = strings.ToLower(strings.Trim(value, "\"'"))
-				break
-			}
-		}
-	}
+	d.logger.Debugf("System info collected - Kernel: %s, SELinux: %s, Uptime: %s",
+		info.KernelVersion, info.SELinuxStatus, info.SystemUptime)
 
 	return info
 }
 
-// parseOSRelease parses /etc/os-release file content
-func parseOSRelease(content string) map[string]string {
-	result := make(map[string]string)
-	scanner := bufio.NewScanner(strings.NewReader(content))
+// GetArchitecture returns the system architecture
+func (d *Detector) GetArchitecture() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-
-		// Remove quotes from value
-		if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') ||
-			(value[0] == '\'' && value[len(value)-1] == '\'')) {
-			value = value[1 : len(value)-1]
-		}
-
-		result[key] = value
+	info, err := host.InfoWithContext(ctx)
+	if err != nil {
+		d.logger.Warnf("Failed to get architecture: %v", err)
+		// Fallback to runtime
+		return "unknown"
 	}
 
-	return result
+	return info.KernelArch
+}
+
+// GetHostname returns the system hostname
+func (d *Detector) GetHostname() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	info, err := host.InfoWithContext(ctx)
+	if err != nil {
+		d.logger.Warnf("Failed to get hostname: %v", err)
+		// Fallback to os.Hostname
+		return os.Hostname()
+	}
+
+	return info.Hostname, nil
+}
+
+// GetIPAddress gets the primary IP address using network interfaces
+func (d *Detector) GetIPAddress() string {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		d.logger.Warnf("Failed to get network interfaces: %v", err)
+		return ""
+	}
+
+	for _, iface := range interfaces {
+		// Skip loopback and down interfaces
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok {
+				if ipnet.IP.To4() != nil && !ipnet.IP.IsLoopback() {
+					return ipnet.IP.String()
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// getKernelVersion gets the kernel version
+func (d *Detector) getKernelVersion(ctx context.Context) string {
+	info, err := host.InfoWithContext(ctx)
+	if err != nil {
+		d.logger.Warnf("Failed to get kernel version: %v", err)
+		return "Unknown"
+	}
+
+	return info.KernelVersion
+}
+
+// getSELinuxStatus gets SELinux status using file reading
+func (d *Detector) getSELinuxStatus() string {
+	// Try getenforce command first
+	if cmd := exec.Command("getenforce"); cmd != nil {
+		if output, err := cmd.Output(); err == nil {
+			status := strings.ToLower(strings.TrimSpace(string(output)))
+			// Map "enforcing" to "enabled" for server validation
+			if status == "enforcing" {
+				return "enabled"
+			}
+			return status
+		}
+	}
+
+	// Fallback to reading config file
+	if data, err := os.ReadFile("/etc/selinux/config"); err == nil {
+		scanner := bufio.NewScanner(strings.NewReader(string(data)))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if value, found := strings.CutPrefix(line, "SELINUX="); found {
+				status := strings.ToLower(strings.Trim(value, "\"'"))
+				// Map "enforcing" to "enabled" for server validation
+				if status == "enforcing" {
+					return "enabled"
+				}
+				return status
+			}
+		}
+	}
+
+	return "disabled"
+}
+
+// getSystemUptime gets system uptime
+func (d *Detector) getSystemUptime(ctx context.Context) string {
+	info, err := host.InfoWithContext(ctx)
+	if err != nil {
+		d.logger.Warnf("Failed to get uptime: %v", err)
+		return "Unknown"
+	}
+
+	uptime := time.Duration(info.Uptime) * time.Second
+
+	days := int(uptime.Hours() / 24)
+	hours := int(uptime.Hours()) % 24
+	minutes := int(uptime.Minutes()) % 60
+
+	if days > 0 {
+		return fmt.Sprintf("%d days, %d hours, %d minutes", days, hours, minutes)
+	} else if hours > 0 {
+		return fmt.Sprintf("%d hours, %d minutes", hours, minutes)
+	} else {
+		return fmt.Sprintf("%d minutes", minutes)
+	}
+}
+
+// getLoadAverage gets system load average
+func (d *Detector) getLoadAverage(ctx context.Context) []float64 {
+	loadAvg, err := load.AvgWithContext(ctx)
+	if err != nil {
+		d.logger.Warnf("Failed to get load average: %v", err)
+		return []float64{0, 0, 0}
+	}
+
+	return []float64{loadAvg.Load1, loadAvg.Load5, loadAvg.Load15}
 }
