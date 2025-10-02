@@ -80,7 +80,7 @@ func sendReport() error {
 			securityUpdateCount++
 		}
 	}
-	logger.Infof("Found %d packages:", len(packageList))
+	logger.Infof("Found %d packages", len(packageList))
 	for _, pkg := range packageList {
 		updateMsg := ""
 		if pkg.NeedsUpdate {
@@ -101,7 +101,7 @@ func sendReport() error {
 		logger.Warnf("Failed to get repositories: %v", err)
 		repoList = []models.Repository{}
 	}
-	logger.Infof("Found %d repositories:", len(repoList))
+	logger.Infof("Found %d repositories", len(repoList))
 	for _, repo := range repoList {
 		logger.Debugf("Repository: %s, Type: %s, URL: %s, Enabled: %t",
 			repo.Name, repo.RepoType, repo.URL, repo.IsEnabled)
