@@ -26,8 +26,6 @@ func New(logger *logrus.Logger) *Manager {
 
 // GetNetworkInfo collects network information
 func (m *Manager) GetNetworkInfo() models.NetworkInfo {
-	m.logger.Debug("Collecting network information...")
-
 	info := models.NetworkInfo{
 		GatewayIP:         m.getGatewayIP(),
 		DNSServers:        m.getDNSServers(),
@@ -35,10 +33,10 @@ func (m *Manager) GetNetworkInfo() models.NetworkInfo {
 	}
 
 	m.logger.WithFields(logrus.Fields{
-		"gateway":    info.GatewayIP,
-		"dns":        len(info.DNSServers),
-		"interfaces": len(info.NetworkInterfaces),
-	}).Debug("Network info collected")
+		"gateway":     info.GatewayIP,
+		"dns_servers": len(info.DNSServers),
+		"interfaces":  len(info.NetworkInterfaces),
+	}).Debug("Collected gateway, DNS, and interface information")
 
 	return info
 }

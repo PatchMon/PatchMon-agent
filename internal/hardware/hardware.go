@@ -42,7 +42,7 @@ func (m *Manager) GetHardwareInfo() models.HardwareInfo {
 		"ram":   fmt.Sprintf("%.2fGB", info.RAMInstalled),
 		"swap":  fmt.Sprintf("%.2fGB", info.SwapSize),
 		"disks": len(info.DiskDetails),
-	}).Debug("Hardware info collected")
+	}).Debug("Collected CPU, memory, and disk information")
 
 	return info
 }

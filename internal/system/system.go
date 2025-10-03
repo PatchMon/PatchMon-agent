@@ -73,7 +73,7 @@ func (d *Detector) GetSystemInfo() models.SystemInfo {
 		"kernel":  info.KernelVersion,
 		"selinux": info.SELinuxStatus,
 		"uptime":  info.SystemUptime,
-	}).Debug("System info collected")
+	}).Debug("Collected kernel, SELinux, and uptime information")
 
 	return info
 }

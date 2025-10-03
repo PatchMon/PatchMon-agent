@@ -69,11 +69,6 @@ func sendReport() error {
 	architecture := systemDetector.GetArchitecture()
 	systemInfo := systemDetector.GetSystemInfo()
 	ipAddress := systemDetector.GetIPAddress()
-	logger.WithFields(logrus.Fields{
-		"hostname":     hostname,
-		"architecture": architecture,
-		"kernel":       systemInfo.KernelVersion,
-	}).Debug("System info collected")
 
 	// Get hardware information
 	logger.Info("Collecting hardware information...")
