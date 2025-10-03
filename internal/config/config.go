@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -63,7 +65,7 @@ func (m *Manager) GetCredentials() *models.Credentials {
 // LoadConfig loads configuration from file
 func (m *Manager) LoadConfig() error {
 	// Check if config file exists
-	if _, err := os.Stat(m.configFile); os.IsNotExist(err) {
+	if _, err := os.Stat(m.configFile); errors.Is(err, fs.ErrNotExist) {
 		// Use defaults if config file doesn't exist
 		return nil
 	}
@@ -84,7 +86,7 @@ func (m *Manager) LoadConfig() error {
 
 // LoadCredentials loads API credentials from file
 func (m *Manager) LoadCredentials() error {
-	if _, err := os.Stat(m.config.CredentialsFile); os.IsNotExist(err) {
+	if _, err := os.Stat(m.config.CredentialsFile); errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("credentials file not found at %s", m.config.CredentialsFile)
 	}
 

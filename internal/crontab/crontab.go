@@ -1,7 +1,9 @@
 package crontab
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 	"time"
@@ -94,7 +96,7 @@ func (m *Manager) GetSchedule() string {
 // Remove removes the PatchMon agent's cron file
 func (m *Manager) Remove() error {
 	if err := os.Remove(config.CronFilePath); err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			// File doesn't exist, which is fine
 			return nil
 		}

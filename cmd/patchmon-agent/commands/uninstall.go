@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -179,7 +181,7 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 
 		// Remove credentials file
 		if err := os.Remove(cfg.CredentialsFile); err != nil {
-			if !os.IsNotExist(err) {
+			if !errors.Is(err, fs.ErrNotExist) {
 				logger.WithError(err).Warn("Failed to remove credentials file")
 			}
 		} else {
@@ -189,7 +191,7 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 		// Remove config file
 		configFile := cfgManager.GetConfigFile()
 		if err := os.Remove(configFile); err != nil {
-			if !os.IsNotExist(err) {
+			if !errors.Is(err, fs.ErrNotExist) {
 				logger.WithError(err).Warn("Failed to remove config file")
 			}
 		} else {
@@ -210,7 +212,7 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 		}
 		if isEmpty {
 			if err := os.Remove(configDir); err != nil {
-				if !os.IsNotExist(err) {
+				if !errors.Is(err, fs.ErrNotExist) {
 					logger.WithError(err).Error("Config directory could not be removed")
 				}
 			} else {
@@ -225,7 +227,7 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 	if removeLogs {
 		logger.Info("Removing log files...")
 		if err := os.Remove(cfg.LogFile); err != nil {
-			if !os.IsNotExist(err) {
+			if !errors.Is(err, fs.ErrNotExist) {
 				logger.WithError(err).Warn("Failed to remove log file")
 			}
 		} else {
