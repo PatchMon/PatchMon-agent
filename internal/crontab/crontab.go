@@ -58,11 +58,9 @@ func (m *Manager) UpdateSchedule(updateInterval int, executablePath string) erro
 // GetEntries returns all current cron entries
 func (m *Manager) GetEntries() []string {
 	if data, err := os.ReadFile(config.CronFilePath); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-
 		// Filter out empty lines and comments
 		var validLines []string
-		for _, line := range lines {
+		for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
 			line = strings.TrimSpace(line)
 			if line != "" && !strings.HasPrefix(line, "#") {
 				validLines = append(validLines, line)

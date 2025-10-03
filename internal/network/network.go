@@ -52,8 +52,7 @@ func (m *Manager) getGatewayIP() string {
 		return ""
 	}
 
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) >= 3 && fields[1] == "00000000" { // Default route
 			// Convert hex gateway to IP
@@ -114,8 +113,7 @@ func (m *Manager) getDNSServers() []string {
 		return servers
 	}
 
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "nameserver") {
 			fields := strings.Fields(line)
