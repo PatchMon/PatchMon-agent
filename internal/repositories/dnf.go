@@ -17,6 +17,16 @@ type DNFManager struct {
 	logger *logrus.Logger
 }
 
+// repoEntry represents a parsed repository entry before processing
+type repoEntry struct {
+	id         string
+	name       string
+	baseurls   []string
+	mirrorlist string
+	metalink   string
+	enabled    *bool // Pointer to distinguish between unset and false
+}
+
 // NewDNFManager creates a new DNF repository manager
 func NewDNFManager(logger *logrus.Logger) *DNFManager {
 	return &DNFManager{
@@ -82,7 +92,7 @@ func (d *DNFManager) parseRepoFile(filename string) ([]models.Repository, error)
 	defer file.Close()
 
 	var repositories []models.Repository
-	var currentRepo models.Repository
+	var currentRepo *repoEntry
 	var inSection bool
 
 	scanner := bufio.NewScanner(file)
@@ -97,20 +107,22 @@ func (d *DNFManager) parseRepoFile(filename string) ([]models.Repository, error)
 		// Check for section header [repo-name]
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			// Save previous repository if it was valid
-			if inSection && currentRepo.Name != "" {
-				repositories = append(repositories, currentRepo)
+			if inSection && currentRepo != nil {
+				repos := d.processRepoEntry(currentRepo)
+				repositories = append(repositories, repos...)
 			}
 
 			// Start new repository
-			currentRepo = models.Repository{
-				Name:     strings.Trim(line, "[]"),
-				RepoType: constants.RepoTypeRPM,
+			currentRepo = &repoEntry{
+				id:        strings.Trim(line, "[]"),
+				enabled:   nil, // Will default to true if not specified
+				baseurls:  []string{},
 			}
 			inSection = true
 			continue
 		}
 
-		if !inSection {
+		if !inSection || currentRepo == nil {
 			continue
 		}
 
@@ -118,6 +130,7 @@ func (d *DNFManager) parseRepoFile(filename string) ([]models.Repository, error)
 		if strings.Contains(line, "=") {
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) != 2 {
+				d.logger.Debugf("Skipping malformed line: %s", line)
 				continue
 			}
 
@@ -126,31 +139,104 @@ func (d *DNFManager) parseRepoFile(filename string) ([]models.Repository, error)
 
 			switch key {
 			case "name":
-				// Store description in Distribution field for now
-				currentRepo.Distribution = value
+				currentRepo.name = value
 			case "baseurl":
-				currentRepo.URL = value
+				// baseurl is a list - can have multiple URLs separated by whitespace
+				urls := strings.Fields(value)
+				currentRepo.baseurls = append(currentRepo.baseurls, urls...)
 			case "mirrorlist":
-				if currentRepo.URL == "" {
-					currentRepo.URL = value
-				}
+				currentRepo.mirrorlist = value
 			case "metalink":
-				if currentRepo.URL == "" {
-					currentRepo.URL = value
-				}
+				currentRepo.metalink = value
 			case "enabled":
-				currentRepo.IsEnabled = (value == "1" || strings.ToLower(value) == "true")
-			case "gpgcheck":
-				// Store GPG check status
-				currentRepo.IsSecure = (value == "1" || strings.ToLower(value) == "true")
+				enabled := (value == "1" || strings.ToLower(value) == "true")
+				currentRepo.enabled = &enabled
 			}
 		}
 	}
 
 	// Don't forget the last repository
-	if inSection && currentRepo.Name != "" {
-		repositories = append(repositories, currentRepo)
+	if inSection && currentRepo != nil {
+		repos := d.processRepoEntry(currentRepo)
+		repositories = append(repositories, repos...)
 	}
 
 	return repositories, scanner.Err()
+}
+
+// processRepoEntry processes a repository entry and creates Repository models
+// Per dnf.conf(5), priority is: baseurl first (in order), then metalink, then mirrorlist
+func (d *DNFManager) processRepoEntry(entry *repoEntry) []models.Repository {
+	var repositories []models.Repository
+
+	// Check if repository is enabled (defaults to true per dnf.conf(5))
+	isEnabled := true
+	if entry.enabled != nil {
+		isEnabled = *entry.enabled
+	}
+
+	// Skip disabled repositories
+	if !isEnabled {
+		d.logger.Debugf("Skipping disabled repository: %s", entry.id)
+		return repositories
+	}
+
+	// Collect all URLs in priority order
+	var urls []string
+
+	// 1. baseurl entries (highest priority, in listed order)
+	for _, url := range entry.baseurls {
+		if d.isValidRepoURL(url) {
+			urls = append(urls, url)
+		}
+	}
+
+	// 2. metalink
+	if entry.metalink != "" && d.isValidRepoURL(entry.metalink) {
+		urls = append(urls, entry.metalink)
+	}
+
+	// 3. mirrorlist (lowest priority)
+	if entry.mirrorlist != "" && d.isValidRepoURL(entry.mirrorlist) {
+		urls = append(urls, entry.mirrorlist)
+	}
+
+	// Create a repository entry for each valid URL
+	for _, url := range urls {
+		repositories = append(repositories, models.Repository{
+			Name:         entry.id,
+			URL:          url,
+			Distribution: entry.name,
+			RepoType:     constants.RepoTypeRPM,
+			IsEnabled:    isEnabled,
+			IsSecure:     d.isSecureURL(url),
+		})
+	}
+
+	if len(repositories) == 0 {
+		d.logger.Debugf("No valid remote URLs found for repository: %s", entry.id)
+	}
+
+	return repositories
+}
+
+// isValidRepoURL checks if a URL is a valid remote repository URL
+// Excludes local-only schemes like file://.
+func (d *DNFManager) isValidRepoURL(url string) bool {
+	supportedPrefixes := []string{
+		"http://", "https://", "ftp://",
+		"mirror://", "mirror+",
+	}
+	
+	for _, prefix := range supportedPrefixes {
+		if strings.HasPrefix(url, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isSecureURL checks if a URL uses HTTPS
+func (d *DNFManager) isSecureURL(url string) bool {
+	return strings.HasPrefix(url, "https://")
 }

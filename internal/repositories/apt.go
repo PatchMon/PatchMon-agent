@@ -180,6 +180,7 @@ func (m *APTManager) parseSourceLine(line string) *models.Repository {
 	}
 
 	if fieldIndex+2 >= len(fields) {
+		m.logger.Debugf("Skipping malformed entry: not enough fields in '%s'", line)
 		return nil
 	}
 
@@ -191,11 +192,19 @@ func (m *APTManager) parseSourceLine(line string) *models.Repository {
 
 	// Skip if URL doesn't look valid
 	if !isValidRepoURL(url) {
+		m.logger.Debugf("Skipping unsupported source: %s", url)
 		return nil
 	}
 
 	// Skip if distribution is empty or looks malformed
 	if distribution == "" || strings.Contains(distribution, "[") {
+		m.logger.Debugf("Skipping malformed entry: invalid distribution '%s'", distribution)
+		return nil
+	}
+
+	// Validate suite/components relationship per sources.list(5)
+	if !isValidSuiteComponents(distribution, components) {
+		m.logger.Debugf("Skipping malformed entry: invalid suite/components combination for '%s'", distribution)
 		return nil
 	}
 
@@ -272,9 +281,12 @@ func (m *APTManager) parseDEB822Sources(filename string) ([]models.Repository, e
 func (m *APTManager) processDEB822Entry(entry map[string]string) []models.Repository {
 	var repositories []models.Repository
 
+	// Check if explicitly disabled (Enabled: no)
+	// Per sources.list(5), Enabled defaults to yes if not specified
 	enabled := entry["Enabled"]
-	if enabled != "yes" {
-		return repositories
+	isEnabled := true
+	if enabled == "no" || enabled == "false" {
+		isEnabled = false
 	}
 
 	types := entry["Types"]
@@ -300,17 +312,26 @@ func (m *APTManager) processDEB822Entry(entry map[string]string) []models.Reposi
 	for _, repoType := range typeList {
 		// Skip if not a supported repo type
 		if repoType != constants.RepoTypeDeb && repoType != constants.RepoTypeDebSrc {
+			m.logger.Debugf("Skipping unsupported repo type: %s", repoType)
 			continue
 		}
 
 		for _, uri := range uriList {
 			// Skip invalid URIs
 			if !isValidRepoURL(uri) {
+				m.logger.Debugf("Skipping unsupported source: %s", uri)
 				continue
 			}
 
 			for _, suite := range suiteList {
 				if suite == "" {
+					m.logger.Debugf("Skipping malformed entry: empty suite")
+					continue
+				}
+
+				// Validate suite/components relationship per sources.list(5)
+				if !isValidSuiteComponents(suite, components) {
+					m.logger.Debugf("Skipping malformed entry: invalid suite/components combination for '%s'", suite)
 					continue
 				}
 
@@ -328,7 +349,7 @@ func (m *APTManager) processDEB822Entry(entry map[string]string) []models.Reposi
 					Distribution: suite,
 					Components:   components,
 					RepoType:     repoType,
-					IsEnabled:    true,
+					IsEnabled:    isEnabled,
 					IsSecure:     isSecureURL(uri),
 				})
 			}
@@ -338,11 +359,40 @@ func (m *APTManager) processDEB822Entry(entry map[string]string) []models.Reposi
 	return repositories
 }
 
-// isValidRepoURL checks if a URL is a valid repository URL
+// isValidSuiteComponents validates the suite/components relationship per sources.list(5).
+// If suite ends with / (exact path), components must be empty.
+// If suite doesn't end with / (distribution), at least one component must be present.
+func isValidSuiteComponents(suite, components string) bool {
+	isExactPath := strings.HasSuffix(suite, "/")
+	hasComponents := components != ""
+
+	// Exact path must have no components
+	if isExactPath && hasComponents {
+		return false
+	}
+
+	// Distribution must have at least one component
+	if !isExactPath && !hasComponents {
+		return false
+	}
+
+	return true
+}
+
+// isValidRepoURL checks if a URL is a valid remote repository URL.
+// Excludes local-only schemes like file, cdrom, copy.
 func isValidRepoURL(url string) bool {
-	return strings.HasPrefix(url, "http://") ||
-		strings.HasPrefix(url, "https://") ||
-		strings.HasPrefix(url, "ftp://")
+	supportedPrefixes := []string{
+		"http://", "https://", "ftp://",
+		"mirror://", "mirror+",
+	}
+
+	for _, prefix := range supportedPrefixes {
+		if strings.HasPrefix(url, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // isSecureURL checks if a URL uses HTTPS
