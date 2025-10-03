@@ -46,7 +46,7 @@ func (d *Detector) DetectOS() (osType, osVersion string, err error) {
 
 	// Map OS variations to their appropriate categories
 	switch osType {
-	case constants.OSTypePop, constants.OSTypeMint, "elementary":
+	case constants.OSTypePop, constants.OSTypeMint, constants.OSTypeElementary:
 		osType = constants.OSTypeUbuntu
 	case constants.OSTypeRHEL, constants.OSTypeRocky, constants.OSTypeAlma, constants.OSTypeCentOS:
 		osType = constants.OSTypeRHEL

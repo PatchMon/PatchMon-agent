@@ -10,15 +10,16 @@ const (
 
 // OS type constants
 const (
-	OSTypeDebian = "debian"
-	OSTypeUbuntu = "ubuntu"
-	OSTypeRHEL   = "rhel"
-	OSTypeCentOS = "centos"
-	OSTypeFedora = "fedora"
-	OSTypeRocky  = "rocky"
-	OSTypeAlma   = "almalinux"
-	OSTypePop    = "pop"
-	OSTypeMint   = "linuxmint"
+	OSTypeDebian     = "debian"
+	OSTypeUbuntu     = "ubuntu"
+	OSTypeRHEL       = "rhel"
+	OSTypeCentOS     = "centos"
+	OSTypeFedora     = "fedora"
+	OSTypeRocky      = "rocky"
+	OSTypeAlma       = "almalinux"
+	OSTypePop        = "pop"
+	OSTypeMint       = "linuxmint"
+	OSTypeElementary = "elementary"
 )
 
 // Architecture constants
