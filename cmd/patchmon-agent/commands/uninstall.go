@@ -198,12 +198,26 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 
 		// Try to remove config directory if empty
 		configDir := filepath.Dir(configFile)
-		if err := os.Remove(configDir); err != nil {
-			if !os.IsNotExist(err) {
-				logger.WithError(err).Error("Config directory could not be removed")
+		isEmpty := true
+		entries, err := os.ReadDir(configDir)
+		if err == nil {
+			for _, entry := range entries {
+				if entry.Name() != "." && entry.Name() != ".." {
+					isEmpty = false
+					break
+				}
+			}
+		}
+		if isEmpty {
+			if err := os.Remove(configDir); err != nil {
+				if !os.IsNotExist(err) {
+					logger.WithError(err).Error("Config directory could not be removed")
+				}
+			} else {
+				logger.WithField("path", configDir).Info("Removed config directory")
 			}
 		} else {
-			logger.WithField("path", configDir).Info("Removed config directory")
+			logger.WithField("path", configDir).Warn("Config directory not empty, skipping removal")
 		}
 	}
 
