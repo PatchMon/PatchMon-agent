@@ -14,6 +14,7 @@ import (
 	"github.com/shirou/gopsutil/v3/load"
 	"github.com/sirupsen/logrus"
 
+	"patchmon-agent/internal/constants"
 	"patchmon-agent/pkg/models"
 )
 
@@ -45,10 +46,10 @@ func (d *Detector) DetectOS() (osType, osVersion string, err error) {
 
 	// Map OS variations to their appropriate categories
 	switch osType {
-	case "pop", "linuxmint", "elementary":
-		osType = "ubuntu"
-	case "rhel", "rocky", "almalinux", "centos":
-		osType = "rhel"
+	case constants.OSTypePop, constants.OSTypeMint, "elementary":
+		osType = constants.OSTypeUbuntu
+	case constants.OSTypeRHEL, constants.OSTypeRocky, constants.OSTypeAlma, constants.OSTypeCentOS:
+		osType = constants.OSTypeRHEL
 	}
 
 	return osType, osVersion, nil
@@ -82,8 +83,7 @@ func (d *Detector) GetArchitecture() string {
 	info, err := host.InfoWithContext(ctx)
 	if err != nil {
 		d.logger.Warnf("Failed to get architecture: %v", err)
-		// Fallback to runtime
-		return "unknown"
+		return constants.ArchUnknown
 	}
 
 	return info.KernelArch
@@ -140,7 +140,7 @@ func (d *Detector) getKernelVersion(ctx context.Context) string {
 	info, err := host.InfoWithContext(ctx)
 	if err != nil {
 		d.logger.Warnf("Failed to get kernel version: %v", err)
-		return "Unknown"
+		return constants.ErrUnknownValue
 	}
 
 	return info.KernelVersion
@@ -153,8 +153,11 @@ func (d *Detector) getSELinuxStatus() string {
 		if output, err := cmd.Output(); err == nil {
 			status := strings.ToLower(strings.TrimSpace(string(output)))
 			// Map "enforcing" to "enabled" for server validation
-			if status == "enforcing" {
-				return "enabled"
+			if status == constants.SELinuxEnforcing {
+				return constants.SELinuxEnabled
+			}
+			if status == constants.SELinuxPermissive {
+				return constants.SELinuxPermissive
 			}
 			return status
 		}
@@ -168,15 +171,18 @@ func (d *Detector) getSELinuxStatus() string {
 			if value, found := strings.CutPrefix(line, "SELINUX="); found {
 				status := strings.ToLower(strings.Trim(value, "\"'"))
 				// Map "enforcing" to "enabled" for server validation
-				if status == "enforcing" {
-					return "enabled"
+				if status == constants.SELinuxEnforcing {
+					return constants.SELinuxEnabled
+				}
+				if status == constants.SELinuxPermissive {
+					return constants.SELinuxPermissive
 				}
 				return status
 			}
 		}
 	}
 
-	return "disabled"
+	return constants.SELinuxDisabled
 }
 
 // getSystemUptime gets system uptime

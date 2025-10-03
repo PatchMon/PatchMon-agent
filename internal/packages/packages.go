@@ -2,6 +2,8 @@ package packages
 
 import (
 	"fmt"
+
+	"patchmon-agent/internal/constants"
 	"patchmon-agent/pkg/models"
 
 	"github.com/sirupsen/logrus"
@@ -29,9 +31,9 @@ func New(logger *logrus.Logger) *Manager {
 // GetPackages gets package information based on OS type
 func (m *Manager) GetPackages(osType string) ([]models.Package, error) {
 	switch osType {
-	case "ubuntu", "debian":
+	case constants.OSTypeUbuntu, constants.OSTypeDebian:
 		return m.aptManager.GetPackages(), nil
-	case "centos", "rhel", "fedora":
+	case constants.OSTypeCentOS, constants.OSTypeRHEL, constants.OSTypeFedora:
 		return m.dnfManager.GetPackages(), nil
 	default:
 		return nil, fmt.Errorf("unsupported OS type: %s", osType)

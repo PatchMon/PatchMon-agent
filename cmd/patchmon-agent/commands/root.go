@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"patchmon-agent/internal/config"
+	"patchmon-agent/internal/constants"
 	"patchmon-agent/internal/version"
 
 	"github.com/sirupsen/logrus"
@@ -100,7 +101,7 @@ func updateLogLevel(cmd *cobra.Command) {
 		} else {
 			// No config value either, use default
 			logger.SetLevel(logrus.InfoLevel)
-			cfgManager.GetConfig().LogLevel = "info"
+			cfgManager.GetConfig().LogLevel = constants.LogLevelInfo
 		}
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/sirupsen/logrus"
 
+	"patchmon-agent/internal/constants"
 	"patchmon-agent/pkg/models"
 )
 
@@ -51,14 +52,14 @@ func (m *Manager) getCPUModel() string {
 	info, err := cpu.InfoWithContext(ctx)
 	if err != nil {
 		m.logger.Warnf("Failed to get CPU info: %v", err)
-		return "Unknown"
+		return constants.ErrUnknownValue
 	}
 
 	if len(info) > 0 {
 		return info[0].ModelName
 	}
 
-	return "Unknown"
+	return constants.ErrUnknownValue
 }
 
 // getCPUCores gets the number of CPU cores

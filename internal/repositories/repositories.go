@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"patchmon-agent/internal/constants"
 	"patchmon-agent/pkg/models"
 
 	"github.com/sirupsen/logrus"
@@ -25,9 +26,9 @@ func New(logger *logrus.Logger) *Manager {
 // GetRepositories gets repository information based on OS type
 func (m *Manager) GetRepositories(osType string) ([]models.Repository, error) {
 	switch osType {
-	case "ubuntu", "debian":
+	case constants.OSTypeUbuntu, constants.OSTypeDebian:
 		return m.aptManager.GetRepositories()
-	case "centos", "rhel", "fedora", "rocky", "almalinux":
+	case constants.OSTypeCentOS, constants.OSTypeRHEL, constants.OSTypeFedora, constants.OSTypeRocky, constants.OSTypeAlma:
 		repos := m.dnfManager.GetRepositories()
 		return repos, nil
 	default:

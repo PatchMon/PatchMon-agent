@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"patchmon-agent/internal/constants"
 	"patchmon-agent/pkg/models"
 
 	"github.com/sirupsen/logrus"
@@ -103,7 +104,7 @@ func (d *DNFManager) parseRepoFile(filename string) ([]models.Repository, error)
 			// Start new repository
 			currentRepo = models.Repository{
 				Name:     strings.Trim(line, "[]"),
-				RepoType: "rpm",
+				RepoType: constants.RepoTypeRPM,
 			}
 			inSection = true
 			continue

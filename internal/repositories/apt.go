@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"patchmon-agent/internal/constants"
 	"patchmon-agent/pkg/models"
 
 	"github.com/sirupsen/logrus"
@@ -141,7 +142,7 @@ func (m *APTManager) parseSourcesList(filename string) ([]models.Repository, err
 		}
 
 		// Parse repository line (deb or deb-src)
-		if strings.HasPrefix(line, "deb") {
+		if strings.HasPrefix(line, constants.RepoTypeDeb) {
 			repo := m.parseSourceLine(line)
 			if repo != nil {
 				repositories = append(repositories, *repo)
@@ -292,43 +293,50 @@ func (m *APTManager) processDEB822Entry(entry map[string]string) []models.Reposi
 	// Split multiple values
 	uriList := slices.Collect(strings.FieldsSeq(uris))
 	suiteList := slices.Collect(strings.FieldsSeq(suites))
+	typeList := slices.Collect(strings.FieldsSeq(types))
 
-	for _, uri := range uriList {
-		// Skip invalid URIs
-		if !strings.HasPrefix(uri, "http://") && !strings.HasPrefix(uri, "https://") && !strings.HasPrefix(uri, "ftp://") {
+	// If no types specified, default to "deb"
+	if len(typeList) == 0 {
+		typeList = []string{constants.RepoTypeDeb}
+	}
+
+	for _, repoType := range typeList {
+		// Skip if not a supported repo type
+		if repoType != constants.RepoTypeDeb && repoType != constants.RepoTypeDebSrc {
 			continue
 		}
 
-		for _, suite := range suiteList {
-			if suite == "" {
+		for _, uri := range uriList {
+			// Skip invalid URIs
+			if !strings.HasPrefix(uri, "http://") && !strings.HasPrefix(uri, "https://") && !strings.HasPrefix(uri, "ftp://") {
 				continue
 			}
 
-			// Generate repository name
-			repoName := name
-			if repoName == "" {
-				repoName = generateRepoName(uri, suite, components)
-			} else {
-				repoName = strings.ToLower(strings.ReplaceAll(repoName, " ", "-"))
+			for _, suite := range suiteList {
+				if suite == "" {
+					continue
+				}
+
+				// Generate repository name
+				repoName := name
+				if repoName == "" {
+					repoName = generateRepoName(uri, suite, components)
+				} else {
+					repoName = strings.ToLower(strings.ReplaceAll(repoName, " ", "-"))
+				}
+
+				isSecure := strings.HasPrefix(uri, "https://")
+
+				repositories = append(repositories, models.Repository{
+					Name:         repoName,
+					URL:          uri,
+					Distribution: suite,
+					Components:   components,
+					RepoType:     repoType,
+					IsEnabled:    true,
+					IsSecure:     isSecure,
+				})
 			}
-
-			// Determine repo type
-			repoType := "deb"
-			if strings.Contains(types, "deb-src") && !strings.Contains(types, "deb ") {
-				repoType = "deb-src"
-			}
-
-			isSecure := strings.HasPrefix(uri, "https://")
-
-			repositories = append(repositories, models.Repository{
-				Name:         repoName,
-				URL:          uri,
-				Distribution: suite,
-				Components:   components,
-				RepoType:     repoType,
-				IsEnabled:    true,
-				IsSecure:     isSecure,
-			})
 		}
 	}
 

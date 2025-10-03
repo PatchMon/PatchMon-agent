@@ -8,6 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"patchmon-agent/internal/constants"
 	"patchmon-agent/pkg/models"
 )
 
@@ -153,9 +154,9 @@ func (m *Manager) getNetworkInterfaces() []models.NetworkInterface {
 			if ipnet, ok := addr.(*net.IPNet); ok {
 				var family string
 				if ipnet.IP.To4() != nil {
-					family = "inet"
+					family = constants.IPFamilyIPv4
 				} else {
-					family = "inet6"
+					family = constants.IPFamilyIPv6
 				}
 
 				addresses = append(addresses, models.NetworkAddress{
@@ -168,11 +169,11 @@ func (m *Manager) getNetworkInterfaces() []models.NetworkInterface {
 		// Only include interfaces that have addresses
 		if len(addresses) > 0 {
 			// Determine interface type
-			interfaceType := "ethernet"
+			interfaceType := constants.NetTypeEthernet
 			if strings.HasPrefix(iface.Name, "wl") || strings.HasPrefix(iface.Name, "wifi") {
-				interfaceType = "wifi"
+				interfaceType = constants.NetTypeWiFi
 			} else if strings.HasPrefix(iface.Name, "docker") || strings.HasPrefix(iface.Name, "br-") {
-				interfaceType = "bridge"
+				interfaceType = constants.NetTypeBridge
 			}
 
 			result = append(result, models.NetworkInterface{
