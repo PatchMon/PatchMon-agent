@@ -190,7 +190,7 @@ func (m *APTManager) parseSourceLine(line string) *models.Repository {
 	}
 
 	// Skip if URL doesn't look valid
-	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "ftp://") {
+	if !isValidRepoURL(url) {
 		return nil
 	}
 
@@ -202,9 +202,6 @@ func (m *APTManager) parseSourceLine(line string) *models.Repository {
 	// Determine repository name
 	repoName := generateRepoName(url, distribution, components)
 
-	// Check if repository uses HTTPS
-	isSecure := strings.HasPrefix(url, "https://")
-
 	return &models.Repository{
 		Name:         repoName,
 		URL:          url,
@@ -212,7 +209,7 @@ func (m *APTManager) parseSourceLine(line string) *models.Repository {
 		Components:   components,
 		RepoType:     repoType,
 		IsEnabled:    true,
-		IsSecure:     isSecure,
+		IsSecure:     isSecureURL(url),
 	}
 }
 
@@ -308,7 +305,7 @@ func (m *APTManager) processDEB822Entry(entry map[string]string) []models.Reposi
 
 		for _, uri := range uriList {
 			// Skip invalid URIs
-			if !strings.HasPrefix(uri, "http://") && !strings.HasPrefix(uri, "https://") && !strings.HasPrefix(uri, "ftp://") {
+			if !isValidRepoURL(uri) {
 				continue
 			}
 
@@ -325,8 +322,6 @@ func (m *APTManager) processDEB822Entry(entry map[string]string) []models.Reposi
 					repoName = strings.ToLower(strings.ReplaceAll(repoName, " ", "-"))
 				}
 
-				isSecure := strings.HasPrefix(uri, "https://")
-
 				repositories = append(repositories, models.Repository{
 					Name:         repoName,
 					URL:          uri,
@@ -334,11 +329,23 @@ func (m *APTManager) processDEB822Entry(entry map[string]string) []models.Reposi
 					Components:   components,
 					RepoType:     repoType,
 					IsEnabled:    true,
-					IsSecure:     isSecure,
+					IsSecure:     isSecureURL(uri),
 				})
 			}
 		}
 	}
 
 	return repositories
+}
+
+// isValidRepoURL checks if a URL is a valid repository URL
+func isValidRepoURL(url string) bool {
+	return strings.HasPrefix(url, "http://") ||
+		strings.HasPrefix(url, "https://") ||
+		strings.HasPrefix(url, "ftp://")
+}
+
+// isSecureURL checks if a URL uses HTTPS
+func isSecureURL(url string) bool {
+	return strings.HasPrefix(url, "https://")
 }
