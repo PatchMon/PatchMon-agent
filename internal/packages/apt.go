@@ -39,11 +39,11 @@ func (m *APTManager) GetPackages() []models.Package {
 	packageManager := m.detectPackageManager()
 
 	// Update package lists using detected package manager
-	m.logger.Debug("Updating package lists...")
+	m.logger.WithField("manager", packageManager).Debug("Updating package lists")
 	updateCmd := exec.Command(packageManager, "update", "-qq")
 
 	if err := updateCmd.Run(); err != nil {
-		m.logger.Warnf("Failed to update package lists: %v", err)
+		m.logger.WithError(err).WithField("manager", packageManager).Warn("Failed to update package lists")
 	}
 
 	// Get installed packages
@@ -52,12 +52,12 @@ func (m *APTManager) GetPackages() []models.Package {
 	installedOutput, err := installedCmd.Output()
 	var installedPackages map[string]string
 	if err != nil {
-		m.logger.Warnf("Failed to get installed packages: %v", err)
+		m.logger.WithError(err).Warn("Failed to get installed packages")
 		installedPackages = make(map[string]string)
 	} else {
 		m.logger.Debug("Parsing installed packages...")
 		installedPackages = m.parseInstalledPackages(string(installedOutput))
-		m.logger.Debugf("Found %d installed packages", len(installedPackages))
+		m.logger.WithField("count", len(installedPackages)).Debug("Found installed packages")
 	}
 
 	// Get upgradable packages using apt simulation
@@ -67,12 +67,12 @@ func (m *APTManager) GetPackages() []models.Package {
 	upgradeOutput, err := upgradeCmd.Output()
 	var upgradablePackages []models.Package
 	if err != nil {
-		m.logger.Warnf("Failed to get upgrade simulation: %v", err)
+		m.logger.WithError(err).Warn("Failed to get upgrade simulation")
 		upgradablePackages = []models.Package{}
 	} else {
 		m.logger.Debug("Parsing apt upgrade simulation output...")
 		upgradablePackages = m.parseAPTUpgrade(string(upgradeOutput))
-		m.logger.Debugf("Found %d upgradable packages", len(upgradablePackages))
+		m.logger.WithField("count", len(upgradablePackages)).Debug("Found upgradable packages")
 	}
 
 	// Merge and deduplicate packages
@@ -97,6 +97,7 @@ func (m *APTManager) parseAPTUpgrade(output string) []models.Package {
 		// Parse the line: Inst package [current_version] (new_version source)
 		fields := slices.Collect(strings.FieldsSeq(line))
 		if len(fields) < 4 {
+			m.logger.WithField("line", line).Debug("Skipping 'Inst' line due to insufficient fields")
 			continue
 		}
 
@@ -163,6 +164,7 @@ func (m *APTManager) parseInstalledPackages(output string) map[string]string {
 
 		parts := strings.SplitN(line, " ", 2)
 		if len(parts) != 2 {
+			m.logger.WithField("line", line).Debug("Skipping malformed installed package line")
 			continue
 		}
 

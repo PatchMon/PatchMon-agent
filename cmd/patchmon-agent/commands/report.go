@@ -13,6 +13,7 @@ import (
 	"patchmon-agent/internal/version"
 	"patchmon-agent/pkg/models"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -36,7 +37,7 @@ func sendReport() error {
 	// Load API credentials to send report
 	logger.Debug("Loading API credentials")
 	if err := cfgManager.LoadCredentials(); err != nil {
-		logger.Debugf("Failed to load credentials: %v", err)
+		logger.WithError(err).Debug("Failed to load credentials")
 		return err
 	}
 
@@ -53,7 +54,10 @@ func sendReport() error {
 	if err != nil {
 		return fmt.Errorf("failed to detect OS: %w", err)
 	}
-	logger.Infof("Detected OS: %s %s", osType, osVersion)
+	logger.WithFields(logrus.Fields{
+		"osType":    osType,
+		"osVersion": osVersion,
+	}).Info("Detected OS")
 
 	// Get system information
 	logger.Info("Collecting system information...")
@@ -65,8 +69,11 @@ func sendReport() error {
 	architecture := systemDetector.GetArchitecture()
 	systemInfo := systemDetector.GetSystemInfo()
 	ipAddress := systemDetector.GetIPAddress()
-	logger.Debugf("System info - Hostname: %s, Architecture: %s, Kernel: %s",
-		hostname, architecture, systemInfo.KernelVersion)
+	logger.WithFields(logrus.Fields{
+		"hostname":     hostname,
+		"architecture": architecture,
+		"kernel":       systemInfo.KernelVersion,
+	}).Debug("System info collected")
 
 	// Get hardware information
 	logger.Info("Collecting hardware information...")
@@ -94,7 +101,7 @@ func sendReport() error {
 			securityUpdateCount++
 		}
 	}
-	logger.Infof("Found %d packages", len(packageList))
+	logger.WithField("count", len(packageList)).Info("Found packages")
 	for _, pkg := range packageList {
 		updateMsg := ""
 		if pkg.NeedsUpdate {
@@ -102,23 +109,32 @@ func sendReport() error {
 		} else {
 			updateMsg = "latest"
 		}
-		logger.Debugf("Package: %s - %s (%s)",
-			pkg.Name, pkg.CurrentVersion, updateMsg)
+		logger.WithFields(logrus.Fields{
+			"name":    pkg.Name,
+			"version": pkg.CurrentVersion,
+			"status":  updateMsg,
+		}).Debug("Package info")
 	}
-	logger.Debugf("Package breakdown - Updates available: %d, Security updates: %d",
-		needsUpdateCount, securityUpdateCount)
+	logger.WithFields(logrus.Fields{
+		"total_updates":    needsUpdateCount,
+		"security_updates": securityUpdateCount,
+	}).Debug("Package summary")
 
 	// Get repository information
 	logger.Info("Collecting repository information...")
 	repoList, err := repoMgr.GetRepositories(osType)
 	if err != nil {
-		logger.Warnf("Failed to get repositories: %v", err)
+		logger.WithError(err).Warn("Failed to get repositories")
 		repoList = []models.Repository{}
 	}
-	logger.Infof("Found %d repositories", len(repoList))
+	logger.WithField("count", len(repoList)).Info("Found repositories")
 	for _, repo := range repoList {
-		logger.Debugf("Repository: %s, Type: %s, URL: %s, Enabled: %t",
-			repo.Name, repo.RepoType, repo.URL, repo.IsEnabled)
+		logger.WithFields(logrus.Fields{
+			"name":    repo.Name,
+			"type":    repo.RepoType,
+			"url":     repo.URL,
+			"enabled": repo.IsEnabled,
+		}).Debug("Repository info")
 	}
 
 	// Create payload
@@ -155,16 +171,19 @@ func sendReport() error {
 	}
 
 	logger.Info("Report sent successfully")
-	logger.Infof("Processed %d packages", response.PackagesProcessed)
+	logger.WithField("count", response.PackagesProcessed).Info("Processed packages")
 
 	// Handle agent auto-update
 	if response.AutoUpdate != nil && response.AutoUpdate.ShouldUpdate {
-		logger.Infof("PatchMon agent update detected: %s", response.AutoUpdate.Message)
-		logger.Infof("Current version: %s, Latest version: %s", response.AutoUpdate.CurrentVersion, response.AutoUpdate.LatestVersion)
+		logger.WithFields(logrus.Fields{
+			"current": response.AutoUpdate.CurrentVersion,
+			"latest":  response.AutoUpdate.LatestVersion,
+			"message": response.AutoUpdate.Message,
+		}).Info("PatchMon agent update detected")
 
 		logger.Info("Automatically updating PatchMon agent to latest version...")
 		if err := updateAgent(); err != nil {
-			logger.Warnf("PatchMon agent update failed, but data was sent successfully: %v", err)
+			logger.WithError(err).Warn("PatchMon agent update failed, but data was sent successfully")
 		} else {
 			logger.Info("PatchMon agent update completed successfully")
 		}

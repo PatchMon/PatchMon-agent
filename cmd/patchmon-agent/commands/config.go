@@ -123,14 +123,14 @@ func configureCreds(apiID, apiKey, serverURL string) error {
 	}
 
 	logger.Info("Configuration saved successfully")
-	logger.Infof("Config saved to %s", cfgManager.GetConfigFile())
-	logger.Infof("Credentials saved to %s", cfg.CredentialsFile)
+	logger.WithField("path", cfgManager.GetConfigFile()).Info("Config saved")
+	logger.WithField("path", cfg.CredentialsFile).Info("Credentials saved")
 
 	// Test credentials
 	logger.Info("Testing connection...")
 	_, err := pingServer()
 	if err != nil {
-		logger.Errorf("Connection test failed: %v", err)
+		logger.WithError(err).Error("Connection test failed")
 		return err
 	}
 

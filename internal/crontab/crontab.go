@@ -34,11 +34,11 @@ func (m *Manager) UpdateSchedule(updateInterval int, executablePath string) erro
 
 	// Check if current entries are up to date
 	if currentEntries := m.GetEntries(); m.entriesMatch(currentEntries, expectedEntries) {
-		m.logger.Infof("Crontab is already up to date (interval: %d minutes)", updateInterval)
+		m.logger.WithField("interval", updateInterval).Info("Crontab is already up to date")
 		return nil
 	}
 
-	m.logger.Infof("Setting update interval to %d minutes", updateInterval)
+	m.logger.WithField("interval", updateInterval).Info("Setting update interval")
 
 	// Write crontab file
 	content := strings.Join(expectedEntries, "\n") + "\n"
@@ -46,7 +46,10 @@ func (m *Manager) UpdateSchedule(updateInterval int, executablePath string) erro
 		return fmt.Errorf("failed to update crontab file: %w", err)
 	}
 
-	m.logger.Info("Crontab updated successfully")
+	m.logger.WithFields(logrus.Fields{
+		"interval": updateInterval,
+		"path":     config.CronFilePath,
+	}).Info("Crontab updated successfully")
 	return nil
 }
 
@@ -98,7 +101,7 @@ func (m *Manager) Remove() error {
 		return fmt.Errorf("failed to remove cron file: %w", err)
 	}
 
-	m.logger.Info("Removed cron file")
+	m.logger.WithField("path", config.CronFilePath).Info("Removed cron file")
 	return nil
 }
 

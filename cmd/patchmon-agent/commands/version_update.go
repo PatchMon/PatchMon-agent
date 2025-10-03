@@ -70,7 +70,7 @@ func checkVersion() error {
 		}
 		fmt.Printf("\nTo update, run: patchmon-agent update-agent\n")
 	} else {
-		logger.Infof("Agent is up to date (version %s)", version.Version)
+		logger.WithField("version", version.Version).Info("Agent is up to date")
 	}
 
 	return nil
@@ -99,7 +99,7 @@ func updateAgent() error {
 	}
 
 	downloadURL := versionResponse.DownloadURL
-	logger.Infof("Downloading latest agent from server...")
+	logger.Info("Downloading latest agent from server...")
 
 	// Download new version
 	newAgentData, err := httpClient.DownloadUpdate(ctx, downloadURL)
@@ -112,7 +112,7 @@ func updateAgent() error {
 	if err := copyFile(executablePath, backupPath); err != nil {
 		return fmt.Errorf("failed to create backup: %w", err)
 	}
-	logger.Infof("Backup saved as: %s", backupPath)
+	logger.WithField("path", backupPath).Info("Backup saved")
 
 	// Write new version to temporary file
 	tempPath := executablePath + ".new"
@@ -135,13 +135,13 @@ func updateAgent() error {
 
 	logger.Info("Agent updated successfully")
 	if versionResponse.CurrentVersion != "" {
-		logger.Infof("Updated to version: %s", versionResponse.CurrentVersion)
+		logger.WithField("version", versionResponse.CurrentVersion).Info("Updated to version")
 	}
 
 	// Send updated information to PatchMon
 	logger.Info("Sending updated information to PatchMon...")
 	if err := sendReport(); err != nil {
-		logger.Warnf("Failed to send updated information to PatchMon (this is not critical): %v", err)
+		logger.WithError(err).Warn("Failed to send updated information to PatchMon (this is not critical)")
 	} else {
 		logger.Info("Successfully sent updated information to PatchMon")
 	}

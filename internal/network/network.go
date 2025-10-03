@@ -34,8 +34,11 @@ func (m *Manager) GetNetworkInfo() models.NetworkInfo {
 		NetworkInterfaces: m.getNetworkInterfaces(),
 	}
 
-	m.logger.Debugf("Network info collected - Gateway: %s, DNS servers: %d, Interfaces: %d",
-		info.GatewayIP, len(info.DNSServers), len(info.NetworkInterfaces))
+	m.logger.WithFields(logrus.Fields{
+		"gateway":    info.GatewayIP,
+		"dns":        len(info.DNSServers),
+		"interfaces": len(info.NetworkInterfaces),
+	}).Debug("Network info collected")
 
 	return info
 }
@@ -45,7 +48,7 @@ func (m *Manager) getGatewayIP() string {
 	// Read /proc/net/route to find default gateway
 	data, err := os.ReadFile("/proc/net/route")
 	if err != nil {
-		m.logger.Warnf("Failed to read /proc/net/route: %v", err)
+		m.logger.WithError(err).Warn("Failed to read /proc/net/route")
 		return ""
 	}
 
@@ -107,7 +110,7 @@ func (m *Manager) getDNSServers() []string {
 	// Read /etc/resolv.conf
 	data, err := os.ReadFile("/etc/resolv.conf")
 	if err != nil {
-		m.logger.Warnf("Failed to read /etc/resolv.conf: %v", err)
+		m.logger.WithError(err).Warn("Failed to read /etc/resolv.conf")
 		return servers
 	}
 
@@ -129,7 +132,7 @@ func (m *Manager) getDNSServers() []string {
 func (m *Manager) getNetworkInterfaces() []models.NetworkInterface {
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		m.logger.Warnf("Failed to get network interfaces: %v", err)
+		m.logger.WithError(err).Warn("Failed to get network interfaces")
 		return []models.NetworkInterface{}
 	}
 
@@ -146,7 +149,7 @@ func (m *Manager) getNetworkInterfaces() []models.NetworkInterface {
 
 		addrs, err := iface.Addrs()
 		if err != nil {
-			m.logger.Warnf("Failed to get addresses for interface %s: %v", iface.Name, err)
+			m.logger.WithError(err).WithField("interface", iface.Name).Warn("Failed to get addresses for interface")
 			continue
 		}
 

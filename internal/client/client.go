@@ -39,7 +39,10 @@ func New(configMgr *config.Manager, logger *logrus.Logger) *Client {
 func (c *Client) Ping(ctx context.Context) (*models.PingResponse, error) {
 	url := fmt.Sprintf("%s/api/%s/hosts/ping", c.config.PatchmonServer, c.config.APIVersion)
 
-	c.logger.Debug("Sending ping request to server")
+	c.logger.WithFields(logrus.Fields{
+		"url":    url,
+		"method": "POST",
+	}).Debug("Sending ping request to server")
 
 	resp, err := c.client.R().
 		SetContext(ctx).
@@ -69,7 +72,10 @@ func (c *Client) Ping(ctx context.Context) (*models.PingResponse, error) {
 func (c *Client) SendUpdate(ctx context.Context, payload *models.ReportPayload) (*models.UpdateResponse, error) {
 	url := fmt.Sprintf("%s/api/%s/hosts/update", c.config.PatchmonServer, c.config.APIVersion)
 
-	c.logger.Debug("Sending update to server")
+	c.logger.WithFields(logrus.Fields{
+		"url":    url,
+		"method": "POST",
+	}).Debug("Sending update to server")
 
 	resp, err := c.client.R().
 		SetContext(ctx).
@@ -100,7 +106,10 @@ func (c *Client) SendUpdate(ctx context.Context, payload *models.ReportPayload) 
 func (c *Client) CheckVersion(ctx context.Context) (*models.VersionResponse, error) {
 	url := fmt.Sprintf("%s/api/%s/hosts/agent/version", c.config.PatchmonServer, c.config.APIVersion)
 
-	c.logger.Debug("Checking for version updates")
+	c.logger.WithFields(logrus.Fields{
+		"url":    url,
+		"method": "GET",
+	}).Debug("Checking for version updates")
 
 	resp, err := c.client.R().
 		SetContext(ctx).
@@ -135,7 +144,7 @@ func (c *Client) DownloadUpdate(ctx context.Context, downloadURL string) ([]byte
 		downloadURL = fmt.Sprintf("%s/api/%s/hosts/agent/download", c.config.PatchmonServer, c.config.APIVersion)
 	}
 
-	c.logger.Debugf("Downloading agent update from: %s", downloadURL)
+	c.logger.WithField("url", downloadURL).Debug("Downloading agent update")
 
 	resp, err := c.client.R().SetContext(ctx).Get(downloadURL)
 	if err != nil {

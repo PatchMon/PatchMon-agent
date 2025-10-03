@@ -39,7 +39,7 @@ func (m *DNFManager) GetPackages() []models.Package {
 	// Determine package manager
 	packageManager := m.detectPackageManager()
 
-	m.logger.Debugf("Using package manager: %s", packageManager)
+	m.logger.WithField("manager", packageManager).Debug("Using package manager")
 
 	// Get installed packages
 	m.logger.Debug("Getting installed packages...")
@@ -47,12 +47,12 @@ func (m *DNFManager) GetPackages() []models.Package {
 	listOutput, err := listCmd.Output()
 	var installedPackages map[string]string
 	if err != nil {
-		m.logger.Warnf("Failed to get installed packages: %v", err)
+		m.logger.WithError(err).Warn("Failed to get installed packages")
 		installedPackages = make(map[string]string)
 	} else {
 		m.logger.Debug("Parsing installed packages...")
 		installedPackages = m.parseInstalledPackages(string(listOutput))
-		m.logger.Debugf("Found %d installed packages", len(installedPackages))
+		m.logger.WithField("count", len(installedPackages)).Debug("Found installed packages")
 	}
 
 	// Get upgradable packages
@@ -64,7 +64,7 @@ func (m *DNFManager) GetPackages() []models.Package {
 	if len(checkOutput) > 0 {
 		m.logger.Debug("Parsing DNF/yum check-update output...")
 		upgradablePackages = m.parseUpgradablePackages(string(checkOutput), packageManager)
-		m.logger.Debugf("Found %d upgradable packages", len(upgradablePackages))
+		m.logger.WithField("count", len(upgradablePackages)).Debug("Found upgradable packages")
 	} else {
 		m.logger.Debug("No updates available")
 		upgradablePackages = []models.Package{}
@@ -72,7 +72,7 @@ func (m *DNFManager) GetPackages() []models.Package {
 
 	// Merge and deduplicate packages
 	packages := CombinePackageData(installedPackages, upgradablePackages)
-	m.logger.Debugf("Total packages collected: %d", len(packages))
+	m.logger.WithField("total", len(packages)).Debug("Total packages collected")
 
 	return packages
 }

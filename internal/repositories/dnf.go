@@ -44,20 +44,23 @@ func (d *DNFManager) GetRepositories() []models.Repository {
 		d.logger.WithError(err).Error("Failed to find repository files")
 		return repositories
 	}
-	d.logger.Debugf("Found %d repo files", len(repoFiles))
+	d.logger.WithField("count", len(repoFiles)).Debug("Found repo files")
 
 	for _, file := range repoFiles {
-		d.logger.Debugf("Parsing repository file: %s", file)
+		d.logger.WithField("file", file).Debug("Parsing repository file")
 		repos, err := d.parseRepoFile(file)
 		if err != nil {
 			d.logger.WithError(err).WithField("file", file).Error("Failed to parse repository file")
 			continue
 		}
-		d.logger.Debugf("Extracted %d repositories from %s", len(repos), file)
+		d.logger.WithFields(logrus.Fields{
+			"file":  file,
+			"count": len(repos),
+		}).Debug("Extracted repositories from file")
 		repositories = append(repositories, repos...)
 	}
 
-	d.logger.Debugf("Total repositories collected: %d", len(repositories))
+	d.logger.WithField("total", len(repositories)).Debug("Total repositories collected")
 	return repositories
 }
 
@@ -70,13 +73,16 @@ func (d *DNFManager) findRepoFiles() ([]string, error) {
 	}
 
 	for _, path := range searchPaths {
-		d.logger.Debugf("Searching for repo files in: %s", path)
+		d.logger.WithField("path", path).Debug("Searching for repo files")
 		files, err := filepath.Glob(filepath.Join(path, "*.repo"))
 		if err != nil {
 			d.logger.WithError(err).WithField("path", path).Warn("Failed to search for repo files")
 			continue
 		}
-		d.logger.Debugf("Found %d repo files in %s", len(files), path)
+		d.logger.WithFields(logrus.Fields{
+			"path":  path,
+			"count": len(files),
+		}).Debug("Found repo files in path")
 		repoFiles = append(repoFiles, files...)
 	}
 
@@ -114,9 +120,9 @@ func (d *DNFManager) parseRepoFile(filename string) ([]models.Repository, error)
 
 			// Start new repository
 			currentRepo = &repoEntry{
-				id:        strings.Trim(line, "[]"),
-				enabled:   nil, // Will default to true if not specified
-				baseurls:  []string{},
+				id:       strings.Trim(line, "[]"),
+				enabled:  nil, // Will default to true if not specified
+				baseurls: []string{},
 			}
 			inSection = true
 			continue
@@ -130,7 +136,7 @@ func (d *DNFManager) parseRepoFile(filename string) ([]models.Repository, error)
 		if strings.Contains(line, "=") {
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) != 2 {
-				d.logger.Debugf("Skipping malformed line: %s", line)
+				d.logger.WithField("line", line).Debug("Skipping malformed line")
 				continue
 			}
 
@@ -177,7 +183,7 @@ func (d *DNFManager) processRepoEntry(entry *repoEntry) []models.Repository {
 
 	// Skip disabled repositories
 	if !isEnabled {
-		d.logger.Debugf("Skipping disabled repository: %s", entry.id)
+		d.logger.WithField("repoId", entry.id).Debug("Skipping disabled repository")
 		return repositories
 	}
 
@@ -214,7 +220,7 @@ func (d *DNFManager) processRepoEntry(entry *repoEntry) []models.Repository {
 	}
 
 	if len(repositories) == 0 {
-		d.logger.Debugf("No valid remote URLs found for repository: %s", entry.id)
+		d.logger.WithField("repoId", entry.id).Debug("No valid remote URLs found for repository")
 	}
 
 	return repositories
@@ -227,7 +233,7 @@ func (d *DNFManager) isValidRepoURL(url string) bool {
 		"http://", "https://", "ftp://",
 		"mirror://", "mirror+",
 	}
-	
+
 	for _, prefix := range supportedPrefixes {
 		if strings.HasPrefix(url, prefix) {
 			return true

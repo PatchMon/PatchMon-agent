@@ -37,7 +37,7 @@ func (d *Detector) DetectOS() (osType, osVersion string, err error) {
 
 	info, err := host.InfoWithContext(ctx)
 	if err != nil {
-		d.logger.Warnf("Failed to get host info: %v", err)
+		d.logger.WithError(err).Warn("Failed to get host info")
 		return "", "", err
 	}
 
@@ -69,8 +69,11 @@ func (d *Detector) GetSystemInfo() models.SystemInfo {
 		LoadAverage:   d.getLoadAverage(ctx),
 	}
 
-	d.logger.Debugf("System info collected - Kernel: %s, SELinux: %s, Uptime: %s",
-		info.KernelVersion, info.SELinuxStatus, info.SystemUptime)
+	d.logger.WithFields(logrus.Fields{
+		"kernel":  info.KernelVersion,
+		"selinux": info.SELinuxStatus,
+		"uptime":  info.SystemUptime,
+	}).Debug("System info collected")
 
 	return info
 }
@@ -82,7 +85,7 @@ func (d *Detector) GetArchitecture() string {
 
 	info, err := host.InfoWithContext(ctx)
 	if err != nil {
-		d.logger.Warnf("Failed to get architecture: %v", err)
+		d.logger.WithError(err).Warn("Failed to get architecture")
 		return constants.ArchUnknown
 	}
 
@@ -96,7 +99,7 @@ func (d *Detector) GetHostname() (string, error) {
 
 	info, err := host.InfoWithContext(ctx)
 	if err != nil {
-		d.logger.Warnf("Failed to get hostname: %v", err)
+		d.logger.WithError(err).Warn("Failed to get hostname")
 		// Fallback to os.Hostname
 		return os.Hostname()
 	}
@@ -108,7 +111,7 @@ func (d *Detector) GetHostname() (string, error) {
 func (d *Detector) GetIPAddress() string {
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		d.logger.Warnf("Failed to get network interfaces: %v", err)
+		d.logger.WithError(err).Warn("Failed to get network interfaces")
 		return ""
 	}
 
@@ -139,7 +142,7 @@ func (d *Detector) GetIPAddress() string {
 func (d *Detector) getKernelVersion(ctx context.Context) string {
 	info, err := host.InfoWithContext(ctx)
 	if err != nil {
-		d.logger.Warnf("Failed to get kernel version: %v", err)
+		d.logger.WithError(err).Warn("Failed to get kernel version")
 		return constants.ErrUnknownValue
 	}
 
@@ -189,7 +192,7 @@ func (d *Detector) getSELinuxStatus() string {
 func (d *Detector) getSystemUptime(ctx context.Context) string {
 	info, err := host.InfoWithContext(ctx)
 	if err != nil {
-		d.logger.Warnf("Failed to get uptime: %v", err)
+		d.logger.WithError(err).Warn("Failed to get uptime")
 		return "Unknown"
 	}
 
@@ -212,7 +215,7 @@ func (d *Detector) getSystemUptime(ctx context.Context) string {
 func (d *Detector) getLoadAverage(ctx context.Context) []float64 {
 	loadAvg, err := load.AvgWithContext(ctx)
 	if err != nil {
-		d.logger.Warnf("Failed to get load average: %v", err)
+		d.logger.WithError(err).Warn("Failed to get load average")
 		return []float64{0, 0, 0}
 	}
 

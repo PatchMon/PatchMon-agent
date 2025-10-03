@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"patchmon-agent/internal/crontab"
+
+	"github.com/spf13/cobra"
 )
 
 // uninstallCmd represents the uninstall command
@@ -65,7 +66,7 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 	// Resolve symlinks to get the actual binary path
 	resolvedPath, err := filepath.EvalSymlinks(executablePath)
 	if err != nil {
-		logger.Warnf("Could not resolve symlinks for %s: %v", executablePath, err)
+		logger.WithError(err).WithField("path", executablePath).Warn("Could not resolve symlinks")
 		resolvedPath = executablePath
 	}
 
@@ -144,7 +145,7 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 	if len(crontabEntries) > 0 {
 		logger.Info("Removing crontab entries...")
 		if err := cronManager.Remove(); err != nil {
-			logger.Warnf("Failed to remove crontab entries: %v", err)
+			logger.WithError(err).Warn("Failed to remove crontab entries")
 		} else {
 			logger.Info("Crontab entries removed successfully")
 		}
@@ -155,20 +156,20 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 		logger.Info("Removing backup files...")
 		for _, backup := range backupFiles {
 			if err := os.Remove(backup); err != nil {
-				logger.Warnf("Failed to remove backup file %s: %v", backup, err)
+				logger.WithError(err).WithField("path", backup).Warn("Failed to remove backup file")
 			} else {
-				logger.Infof("Removed backup file: %s", backup)
+				logger.WithField("path", backup).Info("Removed backup file")
 			}
 		}
 	}
 
 	// Remove additional binaries
 	for _, path := range foundPaths {
-		logger.Infof("Removing additional binary: %s", path)
+		logger.WithField("path", path).Info("Removing additional binary")
 		if err := os.Remove(path); err != nil {
-			logger.Warnf("Failed to remove %s: %v", path, err)
+			logger.WithError(err).WithField("path", path).Warn("Failed to remove binary")
 		} else {
-			logger.Infof("Removed: %s", path)
+			logger.WithField("path", path).Info("Removed binary")
 		}
 	}
 
@@ -179,30 +180,30 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 		// Remove credentials file
 		if err := os.Remove(cfg.CredentialsFile); err != nil {
 			if !os.IsNotExist(err) {
-				logger.Warnf("Failed to remove credentials file: %v", err)
+				logger.WithError(err).Warn("Failed to remove credentials file")
 			}
 		} else {
-			logger.Info("Removed credentials file")
+			logger.WithField("path", cfg.CredentialsFile).Info("Removed credentials file")
 		}
 
 		// Remove config file
 		configFile := cfgManager.GetConfigFile()
 		if err := os.Remove(configFile); err != nil {
 			if !os.IsNotExist(err) {
-				logger.Warnf("Failed to remove config file: %v", err)
+				logger.WithError(err).Warn("Failed to remove config file")
 			}
 		} else {
-			logger.Info("Removed config file")
+			logger.WithField("path", configFile).Info("Removed config file")
 		}
 
 		// Try to remove config directory if empty
 		configDir := filepath.Dir(configFile)
 		if err := os.Remove(configDir); err != nil {
 			if !os.IsNotExist(err) {
-				logger.Debugf("Config directory not empty or could not be removed: %v", err)
+				logger.WithError(err).Error("Config directory could not be removed")
 			}
 		} else {
-			logger.Info("Removed config directory")
+			logger.WithField("path", configDir).Info("Removed config directory")
 		}
 	}
 
@@ -211,15 +212,15 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 		logger.Info("Removing log files...")
 		if err := os.Remove(cfg.LogFile); err != nil {
 			if !os.IsNotExist(err) {
-				logger.Warnf("Failed to remove log file: %v", err)
+				logger.WithError(err).Warn("Failed to remove log file")
 			}
 		} else {
-			logger.Info("Removed log file")
+			logger.WithField("path", cfg.LogFile).Info("Removed log file")
 		}
 	}
 
 	// Remove main binary (this should be done last since we're running from it)
-	logger.Infof("Removing main binary: %s", resolvedPath)
+	logger.WithField("path", resolvedPath).Info("Removing main binary")
 
 	// Create a self-destruct script that will remove the binary after we exit
 	selfDestructScript := fmt.Sprintf(`#!/bin/bash
@@ -231,25 +232,25 @@ rm -f "$0"  # Remove this script too
 
 	scriptPath := "/tmp/patchmon-uninstall.sh"
 	if err := os.WriteFile(scriptPath, []byte(selfDestructScript), 0755); err != nil {
-		logger.Warnf("Failed to create self-destruct script, manual removal required: %v", err)
-		logger.Infof("Please manually remove: %s", resolvedPath)
+		logger.WithError(err).Warn("Failed to create self-destruct script, manual removal required")
+		logger.WithField("path", resolvedPath).Info("Please manually remove")
 	} else {
 		// Execute the self-destruct script in background
 		cmd := exec.Command("nohup", "bash", scriptPath)
 		if err := cmd.Start(); err != nil {
-			logger.Warnf("Failed to start self-destruct script: %v", err)
-			logger.Infof("Please manually remove: %s", resolvedPath)
+			logger.WithError(err).Warn("Failed to start self-destruct script")
+			logger.WithField("path", resolvedPath).Info("Please manually remove")
 		}
 	}
 
 	logger.Info("PatchMon Agent uninstall process completed")
 
 	if !removeConfig {
-		logger.Info("Configuration files were preserved (use --remove-config to remove them)")
+		logger.Info("Configuration files were preserved (--remove-config or --remove-all not set)")
 	}
 
 	if !removeLogs {
-		logger.Info("Log files were preserved (use --remove-logs to remove them)")
+		logger.Info("Log files were preserved (--remove-logs or --remove-all not set)")
 	}
 
 	return nil

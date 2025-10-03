@@ -76,7 +76,7 @@ func initialiseAgent() {
 func updateLogLevel(cmd *cobra.Command) {
 	// Load configuration first
 	if err := cfgManager.LoadConfig(); err != nil {
-		logger.Warnf("Failed to load config: %v", err)
+		logger.WithError(err).Warn("Failed to load config")
 	}
 
 	// Check if the log-level flag was explicitly set
@@ -109,7 +109,7 @@ func updateLogLevel(cmd *cobra.Command) {
 // checkRoot ensures the command is run as root
 func checkRoot() error {
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("this command must be run as root")
+		return fmt.Errorf("this command requires root privileges, please run with sudo or as root user")
 	}
 	return nil
 }

@@ -36,36 +36,42 @@ func (m *APTManager) GetRepositories() ([]models.Repository, error) {
 		m.logger.WithError(err).Error("Failed to find apt list files")
 		return repositories, err
 	}
-	m.logger.Debugf("Found %d apt list files", len(aptSrcFiles))
+	m.logger.WithField("count", len(aptSrcFiles)).Debug("Found apt list files")
 
 	sourcesFiles, err := m.findDeb822SourcesFiles()
 	if err != nil {
 		m.logger.WithError(err).Error("Failed to find deb822 sources files")
 		return repositories, err
 	}
-	m.logger.Debugf("Found %d deb822 sources files", len(sourcesFiles))
+	m.logger.WithField("count", len(sourcesFiles)).Debug("Found deb822 sources files")
 
 	// Parse apt list files
 	for _, file := range aptSrcFiles {
-		m.logger.Debugf("Parsing apt list file: %s", file)
+		m.logger.WithField("file", file).Debug("Parsing apt list file")
 		repos, err := m.parseSourcesList(file)
 		if err != nil {
-			m.logger.Warnf("Error parsing %s: %v", file, err)
+			m.logger.WithError(err).WithField("file", file).Warn("Failed to parse sources list")
 			continue
 		}
-		m.logger.Debugf("Extracted %d repositories from %s", len(repos), file)
+		m.logger.WithFields(logrus.Fields{
+			"file":  file,
+			"count": len(repos),
+		}).Debug("Extracted repositories from apt list file")
 		repositories = append(repositories, repos...)
 	}
 
 	// Parse modern DEB822 format (.sources files)
 	for _, file := range sourcesFiles {
-		m.logger.Debugf("Parsing deb822 sources file: %s", file)
+		m.logger.WithField("file", file).Debug("Parsing deb822 sources file")
 		repos, err := m.parseDEB822Sources(file)
 		if err != nil {
-			m.logger.Warnf("Error parsing %s: %v", file, err)
+			m.logger.WithError(err).WithField("file", file).Warn("Failed to parse deb822 sources")
 			continue
 		}
-		m.logger.Debugf("Extracted %d repositories from %s", len(repos), file)
+		m.logger.WithFields(logrus.Fields{
+			"file":  file,
+			"count": len(repos),
+		}).Debug("Extracted repositories from deb822 file")
 		repositories = append(repositories, repos...)
 	}
 	return repositories, nil
@@ -180,7 +186,11 @@ func (m *APTManager) parseSourceLine(line string) *models.Repository {
 	}
 
 	if fieldIndex+2 >= len(fields) {
-		m.logger.Debugf("Skipping malformed entry: not enough fields in '%s'", line)
+		m.logger.WithFields(logrus.Fields{
+			"line":       line,
+			"fieldCount": len(fields),
+			"fieldIndex": fieldIndex,
+		}).Debug("Skipping malformed entry: not enough fields")
 		return nil
 	}
 
@@ -192,19 +202,22 @@ func (m *APTManager) parseSourceLine(line string) *models.Repository {
 
 	// Skip if URL doesn't look valid
 	if !isValidRepoURL(url) {
-		m.logger.Debugf("Skipping unsupported source: %s", url)
+		m.logger.WithField("url", url).Debug("Skipping unsupported source URL")
 		return nil
 	}
 
 	// Skip if distribution is empty or looks malformed
 	if distribution == "" || strings.Contains(distribution, "[") {
-		m.logger.Debugf("Skipping malformed entry: invalid distribution '%s'", distribution)
+		m.logger.WithField("distribution", distribution).Debug("Skipping malformed distribution")
 		return nil
 	}
 
 	// Validate suite/components relationship per sources.list(5)
 	if !isValidSuiteComponents(distribution, components) {
-		m.logger.Debugf("Skipping malformed entry: invalid suite/components combination for '%s'", distribution)
+		m.logger.WithFields(logrus.Fields{
+			"suite":      distribution,
+			"components": components,
+		}).Debug("Skipping invalid suite/components combination")
 		return nil
 	}
 
@@ -312,26 +325,29 @@ func (m *APTManager) processDEB822Entry(entry map[string]string) []models.Reposi
 	for _, repoType := range typeList {
 		// Skip if not a supported repo type
 		if repoType != constants.RepoTypeDeb && repoType != constants.RepoTypeDebSrc {
-			m.logger.Debugf("Skipping unsupported repo type: %s", repoType)
+			m.logger.WithField("type", repoType).Debug("Skipping unsupported repo type")
 			continue
 		}
 
 		for _, uri := range uriList {
 			// Skip invalid URIs
 			if !isValidRepoURL(uri) {
-				m.logger.Debugf("Skipping unsupported source: %s", uri)
+				m.logger.WithField("uri", uri).Debug("Skipping unsupported source URL")
 				continue
 			}
 
 			for _, suite := range suiteList {
 				if suite == "" {
-					m.logger.Debugf("Skipping malformed entry: empty suite")
+					m.logger.Debug("Skipping malformed entry: empty suite")
 					continue
 				}
 
 				// Validate suite/components relationship per sources.list(5)
 				if !isValidSuiteComponents(suite, components) {
-					m.logger.Debugf("Skipping malformed entry: invalid suite/components combination for '%s'", suite)
+					m.logger.WithFields(logrus.Fields{
+						"suite":      suite,
+						"components": components,
+					}).Debug("Skipping invalid suite/components combination")
 					continue
 				}
 

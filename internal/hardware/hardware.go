@@ -28,8 +28,6 @@ func New(logger *logrus.Logger) *Manager {
 
 // GetHardwareInfo collects hardware information
 func (m *Manager) GetHardwareInfo() models.HardwareInfo {
-	m.logger.Debug("Collecting hardware information...")
-
 	info := models.HardwareInfo{
 		CPUModel:     m.getCPUModel(),
 		CPUCores:     m.getCPUCores(),
@@ -38,8 +36,13 @@ func (m *Manager) GetHardwareInfo() models.HardwareInfo {
 		DiskDetails:  m.getDiskDetails(),
 	}
 
-	m.logger.Debugf("Hardware info collected - CPU: %s (%d cores), RAM: %.2fGB, Swap: %.2fGB, Disks: %d",
-		info.CPUModel, info.CPUCores, info.RAMInstalled, info.SwapSize, len(info.DiskDetails))
+	m.logger.WithFields(logrus.Fields{
+		"cpu":   info.CPUModel,
+		"cores": info.CPUCores,
+		"ram":   fmt.Sprintf("%.2fGB", info.RAMInstalled),
+		"swap":  fmt.Sprintf("%.2fGB", info.SwapSize),
+		"disks": len(info.DiskDetails),
+	}).Debug("Hardware info collected")
 
 	return info
 }
@@ -51,7 +54,7 @@ func (m *Manager) getCPUModel() string {
 
 	info, err := cpu.InfoWithContext(ctx)
 	if err != nil {
-		m.logger.Warnf("Failed to get CPU info: %v", err)
+		m.logger.WithError(err).Warn("Failed to get CPU info")
 		return constants.ErrUnknownValue
 	}
 
@@ -69,7 +72,7 @@ func (m *Manager) getCPUCores() int {
 
 	cores, err := cpu.CountsWithContext(ctx, true) // true for logical cores
 	if err != nil {
-		m.logger.Warnf("Failed to get CPU core count: %v", err)
+		m.logger.WithError(err).Warn("Failed to get CPU core count")
 		return 0
 	}
 
@@ -83,7 +86,7 @@ func (m *Manager) getRAMSize() float64 {
 
 	memInfo, err := mem.VirtualMemoryWithContext(ctx)
 	if err != nil {
-		m.logger.Warnf("Failed to get memory info: %v", err)
+		m.logger.WithError(err).Warn("Failed to get memory info")
 		return 0
 	}
 
@@ -98,7 +101,7 @@ func (m *Manager) getSwapSize() float64 {
 
 	swapInfo, err := mem.SwapMemoryWithContext(ctx)
 	if err != nil {
-		m.logger.Warnf("Failed to get swap info: %v", err)
+		m.logger.WithError(err).Warn("Failed to get swap info")
 		return 0
 	}
 
@@ -113,7 +116,7 @@ func (m *Manager) getDiskDetails() []models.DiskInfo {
 
 	partitions, err := disk.PartitionsWithContext(ctx, false) // false for physical devices only
 	if err != nil {
-		m.logger.Warnf("Failed to get disk partitions: %v", err)
+		m.logger.WithError(err).Warn("Failed to get disk partitions")
 		return []models.DiskInfo{}
 	}
 
@@ -129,7 +132,7 @@ func (m *Manager) getDiskDetails() []models.DiskInfo {
 
 		usage, err := disk.UsageWithContext(ctx, partition.Mountpoint)
 		if err != nil {
-			m.logger.Warnf("Failed to get disk usage for %s: %v", partition.Mountpoint, err)
+			m.logger.WithError(err).WithField("mountpoint", partition.Mountpoint).Warn("Failed to get disk usage")
 			continue
 		}
 
