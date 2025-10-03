@@ -2,12 +2,15 @@ package commands
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"patchmon-agent/internal/crontab"
+	"patchmon-agent/internal/system"
 	"patchmon-agent/internal/utils"
 	"patchmon-agent/internal/version"
 
@@ -34,9 +37,11 @@ func showDiagnostics() error {
 	fmt.Printf("  OS: %s\n", runtime.GOOS)
 	fmt.Printf("  Architecture: %s\n", runtime.GOARCH)
 
-	if kernelVersion, err := utils.GetKernelVersion(); err == nil {
-		fmt.Printf("  Kernel: %s\n", kernelVersion)
-	}
+	systemDetector := system.New(logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	kernelVersion := systemDetector.GetKernelVersion(ctx)
+	fmt.Printf("  Kernel: %s\n", kernelVersion)
 
 	if hostname, err := os.Hostname(); err == nil {
 		fmt.Printf("  Hostname: %s\n", hostname)
