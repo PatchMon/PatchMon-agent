@@ -102,62 +102,6 @@ func (c *Client) SendUpdate(ctx context.Context, payload *models.ReportPayload) 
 	return result, nil
 }
 
-// CheckVersion checks for agent version updates
-func (c *Client) CheckVersion(ctx context.Context) (*models.VersionResponse, error) {
-	url := fmt.Sprintf("%s/api/%s/hosts/agent/version", c.config.PatchmonServer, c.config.APIVersion)
-
-	c.logger.WithFields(logrus.Fields{
-		"url":    url,
-		"method": "GET",
-	}).Debug("Checking for version updates")
-
-	resp, err := c.client.R().
-		SetContext(ctx).
-		SetResult(&models.VersionResponse{}).
-		Get(url)
-
-	if err != nil {
-		return nil, fmt.Errorf("version check failed: %w", err)
-	}
-
-	if resp.StatusCode() != 200 {
-		return nil, fmt.Errorf("version check failed with status %d: %s", resp.StatusCode(), resp.String())
-	}
-
-	result, ok := resp.Result().(*models.VersionResponse)
-	if !ok {
-		return nil, fmt.Errorf("invalid response format")
-	}
-
-	return result, nil
-}
-
-// DownloadUpdate downloads the latest agent version
-func (c *Client) DownloadUpdate(ctx context.Context, downloadURL string) ([]byte, error) {
-	// If download URL is relative, make it absolute
-	if len(downloadURL) > 0 && downloadURL[0] == '/' {
-		downloadURL = c.config.PatchmonServer + downloadURL
-	}
-
-	// If no specific download URL, use default
-	if downloadURL == "" {
-		downloadURL = fmt.Sprintf("%s/api/%s/hosts/agent/download", c.config.PatchmonServer, c.config.APIVersion)
-	}
-
-	c.logger.WithField("url", downloadURL).Debug("Downloading agent update")
-
-	resp, err := c.client.R().SetContext(ctx).Get(downloadURL)
-	if err != nil {
-		return nil, fmt.Errorf("download failed: %w", err)
-	}
-
-	if resp.StatusCode() != 200 {
-		return nil, fmt.Errorf("download failed with status %d: %s", resp.StatusCode(), resp.String())
-	}
-
-	return resp.Body(), nil
-}
-
 // GetUpdateInterval gets the current update interval from server
 func (c *Client) GetUpdateInterval(ctx context.Context) (*models.UpdateIntervalResponse, error) {
 	url := fmt.Sprintf("%s/api/%s/settings/update-interval", c.config.PatchmonServer, c.config.APIVersion)
