@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	github.com/go-resty/resty/v2 v2.16.5
-	github.com/shirou/gopsutil/v3 v3.24.5
+	github.com/shirou/gopsutil/v4 v4.25.9
 	github.com/shirou/gopsutil/v4 v4.25.9
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.10.1
