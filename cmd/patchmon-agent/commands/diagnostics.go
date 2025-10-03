@@ -142,7 +142,11 @@ func getRecentLogs(logFile string) (lines []string) {
 	if err != nil {
 		return lines
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			logger.WithError(closeErr).WithField("file", logFile).Debug("Failed to close log file")
+		}
+	}()
 
 	const maxLines = 10
 	const readBlockSize = 4096
@@ -187,7 +191,13 @@ func getRecentLogs(logFile string) (lines []string) {
 		start = 0
 	}
 
-	file.Seek(start, 0)
+	// Seek to the start position
+	if _, err := file.Seek(start, 0); err != nil {
+		// If seek fails, we can't read from the desired position
+		// Log the error but continue - we'll just return empty lines
+		logger.WithError(err).WithField("file", logFile).Debug("Failed to seek in log file")
+		return lines
+	}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())

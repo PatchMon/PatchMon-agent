@@ -136,7 +136,11 @@ func (m *APTManager) parseSourcesList(filename string) ([]models.Repository, err
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			m.logger.WithError(err).WithField("file", filename).Debug("Failed to close file")
+		}
+	}()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -243,7 +247,11 @@ func (m *APTManager) parseDEB822Sources(filename string) ([]models.Repository, e
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			m.logger.WithError(err).WithField("file", filename).Debug("Failed to close file")
+		}
+	}()
 
 	var currentEntry map[string]string
 	scanner := bufio.NewScanner(file)
@@ -297,10 +305,7 @@ func (m *APTManager) processDEB822Entry(entry map[string]string) []models.Reposi
 	// Check if explicitly disabled (Enabled: no)
 	// Per sources.list(5), Enabled defaults to yes if not specified
 	enabled := entry["Enabled"]
-	isEnabled := true
-	if enabled == "no" || enabled == "false" {
-		isEnabled = false
-	}
+	isEnabled := enabled != "no" && enabled != "false"
 
 	types := entry["Types"]
 	uris := entry["URIs"]

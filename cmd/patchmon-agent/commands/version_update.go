@@ -123,13 +123,17 @@ func updateAgent() error {
 	// Verify the new executable works
 	testCmd := exec.Command(tempPath, "--version")
 	if err := testCmd.Run(); err != nil {
-		os.Remove(tempPath)
+		if removeErr := os.Remove(tempPath); removeErr != nil {
+			logger.WithError(removeErr).Warn("Failed to remove temporary file after validation failure")
+		}
 		return fmt.Errorf("new agent executable is invalid: %w", err)
 	}
 
 	// Replace current executable
 	if err := os.Rename(tempPath, executablePath); err != nil {
-		os.Remove(tempPath)
+		if removeErr := os.Remove(tempPath); removeErr != nil {
+			logger.WithError(removeErr).Warn("Failed to remove temporary file after rename failure")
+		}
 		return fmt.Errorf("failed to replace executable: %w", err)
 	}
 

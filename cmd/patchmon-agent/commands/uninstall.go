@@ -133,7 +133,11 @@ func performUninstall(removeConfig, removeLogs, force bool) error {
 	if !force {
 		fmt.Printf("Are you sure you want to uninstall PatchMon Agent? [y/N]: ")
 		var response string
-		fmt.Scanln(&response)
+		// Read response - if Scanln fails (e.g., no input), treat as "no"
+		if _, err := fmt.Scanln(&response); err != nil {
+			logger.Info("Uninstall cancelled")
+			return nil
+		}
 		response = strings.ToLower(strings.TrimSpace(response))
 		if response != "y" && response != "yes" {
 			logger.Info("Uninstall cancelled")

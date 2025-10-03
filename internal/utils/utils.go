@@ -12,6 +12,10 @@ func TcpPing(host, port string) bool {
 	if err != nil {
 		return false
 	}
-	defer conn.Close()
+	defer func() {
+		// Silently ignore close errors for TCP connections in utility function
+		// Errors here are extremely rare and non-critical for a connectivity test
+		_ = conn.Close()
+	}()
 	return true
 }

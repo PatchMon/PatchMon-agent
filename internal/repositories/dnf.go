@@ -95,7 +95,11 @@ func (d *DNFManager) parseRepoFile(filename string) ([]models.Repository, error)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			d.logger.WithError(err).WithField("file", filename).Debug("Failed to close file")
+		}
+	}()
 
 	var repositories []models.Repository
 	var currentRepo *repoEntry
