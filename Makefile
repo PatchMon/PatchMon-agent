@@ -63,7 +63,7 @@ fmt:
 .PHONY: lint
 lint:
 	@echo "Linting code..."
-	@go golangci-lint run
+	@golangci-lint run
 
 # Clean build artifacts
 .PHONY: clean
