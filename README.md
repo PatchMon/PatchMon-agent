@@ -2,13 +2,6 @@
 
 PatchMon's monitoring agent sends package and repository information to the PatchMon server.
 
-## Features
-
-- **Multi-OS Support**: Ubuntu, Debian, CentOS, RHEL, Fedora
-- **Auto-Updates**: Supports automatic agent updates from the server
-- **Crontab Management**: Automatic crontab configuration based on server policies
-- **Comprehensive Diagnostics**: Detailed system and configuration information
-
 ## Installation
 
 ### Binary Installation
@@ -40,12 +33,12 @@ PatchMon's monitoring agent sends package and repository information to the Patc
 
 1. **Configure Credentials**:
    ```bash
-   sudo patchmon-agent configure <API_ID> <API_KEY> <SERVER_URL>
+   sudo patchmon-agent config set-api <API_ID> <API_KEY> <SERVER_URL>
    ```
 
    Example:
    ```bash
-   sudo patchmon-agent configure patchmon_1a2b3c4d abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890 http://patchmon.example.com
+   sudo patchmon-agent config set-api patchmon_1a2b3c4d abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890 http://patchmon.example.com
    ```
 
 2. **Test Configuration**:
@@ -70,22 +63,21 @@ PatchMon's monitoring agent sends package and repository information to the Patc
 
 ```bash
 # Configuration and setup
-sudo patchmon-agent configure <API_ID> <API_KEY> <SERVER_URL>   # Configure credentials
-sudo patchmon-agent test                                        # Test credentials
-sudo patchmon-agent config                                      # Show current config
+sudo patchmon-agent config set-api <API_ID> <API_KEY> <SERVER_URL>  # Configure credentials
+sudo patchmon-agent config show                                     # Show current config
+sudo patchmon-agent ping                                            # Test credentials and connectivity
 
 # Data collection and reporting
-sudo patchmon-agent report                                      # Report system & package status to server
-sudo patchmon-agent ping                                        # Test server connectivity
+sudo patchmon-agent report                                          # Report system & package status to server
 
 # Agent management
-sudo patchmon-agent check-version                               # Check for updates
-sudo patchmon-agent update-agent                                # Update to latest version
-sudo patchmon-agent update-crontab                              # Update cron schedule
-sudo patchmon-agent uninstall [flags]                           # Uninstall the agent
+sudo patchmon-agent check-version                                   # Check for updates
+sudo patchmon-agent update-agent                                    # Update to latest version
+sudo patchmon-agent update-crontab                                  # Update cron schedule
+sudo patchmon-agent uninstall [flags]                               # Uninstall the agent
 
 # Diagnostics
-sudo patchmon-agent diagnostics                                 # Show system diagnostics
+sudo patchmon-agent diagnostics                                     # Show system diagnostics
 ```
 
 ### Example Configuration File
@@ -186,10 +178,10 @@ The uninstall process will:
 Logs are written to `/var/log/patchmon-agent.log` with timestamps and structured format:
 
 ```
-2023-09-27T10:30:00Z [INFO] Collecting package information...
-2023-09-27T10:30:01Z [INFO] Found 156 packages
-2023-09-27T10:30:02Z [INFO] Sending update to PatchMon server...
-2023-09-27T10:30:03Z [INFO] Update sent successfully
+2023-09-27T10:30:00 level=info msg="Collecting package information..."
+2023-09-27T10:30:01 level=info msg="Found packages" count=156
+2023-09-27T10:30:02 level=info msg="Sending report to PatchMon server..."
+2023-09-27T10:30:03 level=info msg="Report sent successfully"
 ```
 
 Log levels: `debug`, `info`, `warn`, `error`
@@ -207,7 +199,7 @@ Log levels: `debug`, `info`, `warn`, `error`
 2. **Credentials Not Found**:
    ```bash
    # Configure credentials first
-   sudo patchmon-agent configure <API_ID> <API_KEY> <SERVER_URL>
+   sudo patchmon-agent config set-api <API_ID> <API_KEY> <SERVER_URL>
    ```
 
 3. **Network Connectivity**:
@@ -259,15 +251,21 @@ make deps
 # Build for current platform
 make build
 
-# Build for all supported platforms
+# Build for all supported platforms (Linux amd64, arm64, i386)
 make build-all
 
 # Run tests
 make test
 
+# Run tests with coverage
+make test-coverage
+
 # Format and lint
 make fmt
 make lint
+
+# Clean build artifacts
+make clean
 ```
 
 ## Contributing
