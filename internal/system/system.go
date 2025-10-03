@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shirou/gopsutil/v3/host"
-	"github.com/shirou/gopsutil/v3/load"
+	"github.com/shirou/gopsutil/v4/host"
+	"github.com/shirou/gopsutil/v4/load"
 	"github.com/sirupsen/logrus"
 
 	"patchmon-agent/internal/constants"
