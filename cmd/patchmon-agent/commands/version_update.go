@@ -2,9 +2,14 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
+	"strings"
 	"time"
 
 	"patchmon-agent/internal/client"
@@ -13,6 +18,22 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+const (
+	githubAPIURL  = "https://api.github.com/repos/PatchMon/patchmon-agent/releases/latest"
+	githubTimeout = 30 * time.Second
+)
+
+// GitHubRelease represents a GitHub release
+type GitHubRelease struct {
+	TagName string `json:"tag_name"`
+	Name    string `json:"name"`
+	Body    string `json:"body"`
+	Assets  []struct {
+		Name               string `json:"name"`
+		BrowserDownloadURL string `json:"browser_download_url"`
+	} `json:"assets"`
+}
 
 // checkVersionCmd represents the check-version command
 var checkVersionCmd = &cobra.Command{
@@ -43,46 +64,31 @@ var updateAgentCmd = &cobra.Command{
 }
 
 func checkVersion() error {
-	// Load credentials
-	if err := cfgManager.LoadCredentials(); err != nil {
-		return err
-	}
-
 	logger.Info("Checking for agent updates...")
 
-	// Create client and check version
-	httpClient := client.New(cfgManager, logger)
-	ctx := context.Background()
-	response, err := httpClient.CheckVersion(ctx)
+	release, err := getLatestRelease()
 	if err != nil {
 		return fmt.Errorf("failed to check for updates: %w", err)
 	}
 
-	if response.CurrentVersion != "" && response.CurrentVersion != version.Version {
-		logger.Warn("Agent update available!")
-		fmt.Printf("  Current version: %s\n", version.Version)
-		fmt.Printf("  Latest version: %s\n", response.CurrentVersion)
-		if response.ReleaseNotes != "" {
-			fmt.Printf("  Release notes: %s\n", response.ReleaseNotes)
-		}
-		if response.DownloadURL != "" {
-			fmt.Printf("  Download URL: %s\n", response.DownloadURL)
-		}
+	latestVersion := strings.TrimPrefix(release.TagName, "v")
+	currentVersion := strings.TrimPrefix(version.Version, "v")
+
+	if latestVersion != currentVersion {
+		logger.Info("Agent update available!")
+		fmt.Printf("  Current version: %s\n", currentVersion)
+		fmt.Printf("  Latest version: %s\n", latestVersion)
+
 		fmt.Printf("\nTo update, run: patchmon-agent update-agent\n")
 	} else {
-		logger.WithField("version", version.Version).Info("Agent is up to date")
+		logger.WithField("version", currentVersion).Info("Agent is up to date")
 	}
 
 	return nil
 }
 
 func updateAgent() error {
-	// Load credentials
-	if err := cfgManager.LoadCredentials(); err != nil {
-		return err
-	}
-
-	logger.Info("Updating agent script...")
+	logger.Info("Updating agent...")
 
 	// Get current executable path
 	executablePath, err := os.Executable()
@@ -90,19 +96,33 @@ func updateAgent() error {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	// Create client and get version info
-	httpClient := client.New(cfgManager, logger)
-	ctx := context.Background()
-	versionResponse, err := httpClient.CheckVersion(ctx)
+	// Get latest release info
+	release, err := getLatestRelease()
 	if err != nil {
-		return fmt.Errorf("failed to get update information: %w", err)
+		return fmt.Errorf("failed to get release information: %w", err)
 	}
 
-	downloadURL := versionResponse.DownloadURL
-	logger.Info("Downloading latest agent from server...")
+	latestVersion := strings.TrimPrefix(release.TagName, "v")
+	logger.WithField("version", latestVersion).Info("Found latest version")
+
+	// Determine the correct asset name for this platform
+	assetName := getAssetName()
+	var downloadURL string
+	for _, asset := range release.Assets {
+		if asset.Name == assetName {
+			downloadURL = asset.BrowserDownloadURL
+			break
+		}
+	}
+
+	if downloadURL == "" {
+		return fmt.Errorf("no compatible binary found for %s-%s in release %s", runtime.GOOS, runtime.GOARCH, release.TagName)
+	}
+
+	logger.WithField("url", downloadURL).Info("Downloading latest agent...")
 
 	// Download new version
-	newAgentData, err := httpClient.DownloadUpdate(ctx, downloadURL)
+	newAgentData, err := downloadBinary(downloadURL)
 	if err != nil {
 		return fmt.Errorf("failed to download new agent: %w", err)
 	}
@@ -137,10 +157,7 @@ func updateAgent() error {
 		return fmt.Errorf("failed to replace executable: %w", err)
 	}
 
-	logger.Info("Agent updated successfully")
-	if versionResponse.CurrentVersion != "" {
-		logger.WithField("version", versionResponse.CurrentVersion).Info("Updated to version")
-	}
+	logger.WithField("version", latestVersion).Info("Agent updated successfully")
 
 	// Send updated information to PatchMon
 	logger.Info("Sending updated information to PatchMon...")
@@ -151,6 +168,80 @@ func updateAgent() error {
 	}
 
 	return nil
+}
+
+// getLatestRelease fetches the latest release from GitHub
+func getLatestRelease() (*GitHubRelease, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), githubTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", githubAPIURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", fmt.Sprintf("patchmon-agent/%s", version.Version))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.WithError(closeErr).Debug("Failed to close response body")
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+
+	var release GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, fmt.Errorf("failed to decode release info: %w", err)
+	}
+
+	return &release, nil
+}
+
+// downloadBinary downloads a binary from the given URL
+func downloadBinary(url string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", fmt.Sprintf("patchmon-agent/%s", version.Version))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.WithError(closeErr).Debug("Failed to close response body")
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	return data, nil
+}
+
+// getAssetName returns the expected asset name for the current platform
+func getAssetName() string {
+	return fmt.Sprintf("patchmon-agent-%s-%s", runtime.GOOS, runtime.GOARCH)
 }
 
 // copyFile copies a file from src to dst
