@@ -142,6 +142,7 @@ func sendReport() error {
 		IP:                ipAddress,
 		Architecture:      architecture,
 		AgentVersion:      version.Version,
+		MachineID:         systemDetector.GetMachineID(),
 		KernelVersion:     systemInfo.KernelVersion,
 		SELinuxStatus:     systemInfo.SELinuxStatus,
 		SystemUptime:      systemInfo.SystemUptime,

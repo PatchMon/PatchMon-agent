@@ -74,6 +74,7 @@ type ReportPayload struct {
 	IP                string             `json:"ip"`
 	Architecture      string             `json:"architecture"`
 	AgentVersion      string             `json:"agentVersion"`
+	MachineID         string             `json:"machineId"`
 	KernelVersion     string             `json:"kernelVersion"`
 	SELinuxStatus     string             `json:"selinuxStatus"`
 	SystemUptime      string             `json:"systemUptime"`
