@@ -221,3 +221,23 @@ func (d *Detector) getLoadAverage(ctx context.Context) []float64 {
 
 	return []float64{loadAvg.Load1, loadAvg.Load5, loadAvg.Load15}
 }
+
+// GetMachineID returns the system's machine ID using gopsutil
+func (d *Detector) GetMachineID() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Use gopsutil's HostID which reads from standard locations
+	// (/etc/machine-id, /var/lib/dbus/machine-id, etc.)
+	hostID, err := host.HostIDWithContext(ctx)
+	if err != nil {
+		d.logger.WithError(err).Warn("Failed to get host ID, using hostname as fallback")
+		// Fallback to hostname if we can't get machine ID
+		if hostname, err := os.Hostname(); err == nil {
+			return hostname
+		}
+		return "unknown"
+	}
+
+	return hostID
+}
