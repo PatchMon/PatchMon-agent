@@ -54,6 +54,10 @@ func showDiagnostics() error {
 		fmt.Printf("  Hostname: %s\n", hostname)
 	}
 
+	// Show machine ID
+	machineID := systemDetector.GetMachineID()
+	fmt.Printf("  Machine ID: %s\n", machineID)
+
 	fmt.Printf("\n")
 
 	// Agent Information
