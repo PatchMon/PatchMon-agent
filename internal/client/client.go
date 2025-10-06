@@ -27,6 +27,9 @@ func New(configMgr *config.Manager, logger *logrus.Logger) *Client {
 	client.SetRetryCount(3)
 	client.SetRetryWaitTime(2 * time.Second)
 
+	// Configure Resty to use our logger
+	client.SetLogger(logger)
+
 	return &Client{
 		client:      client,
 		config:      configMgr.GetConfig(),

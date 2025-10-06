@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"strings"
@@ -96,8 +97,18 @@ func showDiagnostics() error {
 	}
 
 	// API credentials and server connectivity test
-	if _, err := pingServer(); err != nil {
-		fmt.Printf("  ❌ API connectivity test failed: %v\n", err)
+	fmt.Printf("  ⏳ API connectivity test in progress...")
+
+	// Temporarily disable logging output during diagnostics
+	originalOutput := logger.Out
+	logger.SetOutput(io.Discard)
+	_, pingErr := pingServer()
+	logger.SetOutput(originalOutput)
+
+	// Clear the progress line and show result
+	fmt.Printf("\r") // Return to beginning of line
+	if pingErr != nil {
+		fmt.Printf("  ❌ API connectivity not available: %v\n", pingErr)
 	} else {
 		fmt.Printf("  ✅ API is reachable and credentials are valid\n")
 	}
