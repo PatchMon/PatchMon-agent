@@ -33,10 +33,20 @@ func showDiagnostics() error {
 
 	// System Information
 	fmt.Printf("System Information:\n")
-	fmt.Printf("  OS: %s\n", runtime.GOOS)
-	fmt.Printf("  Architecture: %s\n", runtime.GOARCH)
 
 	systemDetector := system.New(logger)
+
+	osType, osVersion, err := systemDetector.DetectOS()
+	if err != nil {
+		fmt.Printf("  OS: %s (detection failed: %v)\n", runtime.GOOS, err)
+		osType = runtime.GOOS
+		osVersion = "unknown"
+	} else {
+		fmt.Printf("  OS: %s %s\n", osType, osVersion)
+	}
+
+	fmt.Printf("  Architecture: %s\n", runtime.GOARCH)
+
 	kernelVersion := systemDetector.GetKernelVersion()
 	fmt.Printf("  Kernel: %s\n", kernelVersion)
 
