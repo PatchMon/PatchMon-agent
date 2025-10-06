@@ -57,13 +57,10 @@ func (d *Detector) DetectOS() (osType, osVersion string, err error) {
 
 // GetSystemInfo gets additional system information
 func (d *Detector) GetSystemInfo() models.SystemInfo {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	d.logger.Debug("Beginning system information collection")
 
 	info := models.SystemInfo{
-		KernelVersion: d.GetKernelVersion(ctx),
+		KernelVersion: d.GetKernelVersion(),
 		SELinuxStatus: d.getSELinuxStatus(),
 		SystemUptime:  d.getSystemUptime(ctx),
 		LoadAverage:   d.getLoadAverage(ctx),
@@ -139,7 +136,10 @@ func (d *Detector) GetIPAddress() string {
 }
 
 // GetKernelVersion gets the kernel version
-func (d *Detector) GetKernelVersion(ctx context.Context) string {
+func (d *Detector) GetKernelVersion() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	info, err := host.InfoWithContext(ctx)
 	if err != nil {
 		d.logger.WithError(err).Warn("Failed to get kernel version")
