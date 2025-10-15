@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"patchmon-agent/internal/client"
 	"patchmon-agent/internal/hardware"
@@ -32,6 +33,8 @@ var reportCmd = &cobra.Command{
 }
 
 func sendReport() error {
+	// Start tracking execution time
+	startTime := time.Now()
 	logger.Debug("Starting report process")
 
 	// Load API credentials to send report
@@ -132,6 +135,10 @@ func sendReport() error {
 		}).Debug("Repository info")
 	}
 
+	// Calculate execution time (in seconds, with millisecond precision)
+	executionTime := time.Since(startTime).Seconds()
+	logger.WithField("execution_time_seconds", executionTime).Debug("Data collection completed")
+
 	// Create payload
 	payload := &models.ReportPayload{
 		Packages:          packageList,
@@ -155,6 +162,7 @@ func sendReport() error {
 		GatewayIP:         networkInfo.GatewayIP,
 		DNSServers:        networkInfo.DNSServers,
 		NetworkInterfaces: networkInfo.NetworkInterfaces,
+		ExecutionTime:     executionTime,
 	}
 
 	// Send report
