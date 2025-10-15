@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"patchmon-agent/internal/client"
-	"patchmon-agent/internal/crontab"
 	"patchmon-agent/internal/version"
 
 	"github.com/spf13/cobra"
@@ -254,48 +252,4 @@ func copyFile(src, dst string) error {
 	return os.WriteFile(dst, data, 0755)
 }
 
-// updateCrontabCmd represents the update-crontab command
-var updateCrontabCmd = &cobra.Command{
-	Use:   "update-crontab",
-	Short: "Update crontab with current policy",
-	Long:  "Update the crontab entry with the current update interval policy from the server.",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := checkRoot(); err != nil {
-			return err
-		}
-
-		return updateCrontabFromServer()
-	},
-}
-
-func updateCrontabFromServer() error {
-	// Load credentials
-	if err := cfgManager.LoadCredentials(); err != nil {
-		return err
-	}
-
-	logger.Info("Updating crontab with current policy...")
-
-	// Create client and get update interval
-	httpClient := client.New(cfgManager, logger)
-	ctx := context.Background()
-	response, err := httpClient.GetUpdateInterval(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get update interval policy: %w", err)
-	}
-
-	updateInterval := response.UpdateInterval
-	if updateInterval <= 0 {
-		return fmt.Errorf("invalid update interval: %d", updateInterval)
-	}
-
-	// Get current executable path
-	executablePath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-
-	// Create crontab manager and update schedule
-	cronManager := crontab.New(logger)
-	return cronManager.UpdateSchedule(updateInterval, executablePath)
-}
+// Removed update-crontab command (cron is no longer used)

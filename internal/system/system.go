@@ -59,6 +59,9 @@ func (d *Detector) DetectOS() (osType, osVersion string, err error) {
 func (d *Detector) GetSystemInfo() models.SystemInfo {
 	d.logger.Debug("Beginning system information collection")
 
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
 	info := models.SystemInfo{
 		KernelVersion: d.GetKernelVersion(),
 		SELinuxStatus: d.getSELinuxStatus(),
