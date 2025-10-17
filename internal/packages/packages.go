@@ -2,8 +2,9 @@ package packages
 
 import (
 	"fmt"
+	"os/exec"
+	"strings"
 
-	"patchmon-agent/internal/constants"
 	"patchmon-agent/pkg/models"
 
 	"github.com/sirupsen/logrus"
@@ -30,14 +31,59 @@ func New(logger *logrus.Logger) *Manager {
 
 // GetPackages gets package information based on OS type
 func (m *Manager) GetPackages(osType string) ([]models.Package, error) {
-	switch osType {
-	case constants.OSTypeUbuntu, constants.OSTypeDebian:
+	// Convert OS type to lowercase for comparison
+	osTypeLower := strings.ToLower(osType)
+	
+	// Check for Debian-based distributions (APT)
+	if strings.Contains(osTypeLower, "debian") || 
+	   strings.Contains(osTypeLower, "ubuntu") || 
+	   strings.Contains(osTypeLower, "pop") || 
+	   strings.Contains(osTypeLower, "mint") || 
+	   strings.Contains(osTypeLower, "elementary") ||
+	   strings.Contains(osTypeLower, "kali") ||
+	   strings.Contains(osTypeLower, "parrot") {
 		return m.aptManager.GetPackages(), nil
-	case constants.OSTypeCentOS, constants.OSTypeRHEL, constants.OSTypeFedora:
-		return m.dnfManager.GetPackages(), nil
-	default:
-		return nil, fmt.Errorf("unsupported OS type: %s", osType)
 	}
+	
+	// Check for RHEL-based distributions (DNF/YUM)
+	if strings.Contains(osTypeLower, "rhel") || 
+	   strings.Contains(osTypeLower, "centos") || 
+	   strings.Contains(osTypeLower, "rocky") || 
+	   strings.Contains(osTypeLower, "alma") || 
+	   strings.Contains(osTypeLower, "fedora") ||
+	   strings.Contains(osTypeLower, "red hat") {
+		return m.dnfManager.GetPackages(), nil
+	}
+	
+	// Fallback: try to detect package manager directly
+	if m.detectPackageManager() == "apt" {
+		return m.aptManager.GetPackages(), nil
+	} else if m.detectPackageManager() == "dnf" || m.detectPackageManager() == "yum" {
+		return m.dnfManager.GetPackages(), nil
+	}
+	
+	return nil, fmt.Errorf("unsupported OS type: %s", osType)
+}
+
+// detectPackageManager detects which package manager is available on the system
+func (m *Manager) detectPackageManager() string {
+	// Check for APT first
+	if _, err := exec.LookPath("apt"); err == nil {
+		return "apt"
+	}
+	if _, err := exec.LookPath("apt-get"); err == nil {
+		return "apt"
+	}
+	
+	// Check for DNF/YUM
+	if _, err := exec.LookPath("dnf"); err == nil {
+		return "dnf"
+	}
+	if _, err := exec.LookPath("yum"); err == nil {
+		return "yum"
+	}
+	
+	return "unknown"
 }
 
 // CombinePackageData combines and deduplicates installed and upgradable package lists

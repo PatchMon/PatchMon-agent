@@ -84,16 +84,6 @@ func showDiagnostics() error {
 	}
 	fmt.Printf("\n")
 
-	// Crontab Status
-	fmt.Printf("Crontab Status:\n")
-	cronManager := crontab.New(logger)
-	if crontabSchedule := cronManager.GetSchedule(); crontabSchedule != "" {
-		fmt.Printf("  ✅ Schedule installed: %s\n", crontabSchedule)
-	} else {
-		fmt.Printf("  ❌ Schedule not installed\n")
-	}
-	fmt.Printf("\n")
-
 	// Network Connectivity & API Credentials
 	fmt.Printf("Network Connectivity & API Credentials:\n")
 	fmt.Printf("  Server URL: %s\n", cfg.PatchmonServer)
