@@ -3,10 +3,12 @@
 # Build variables
 BINARY_NAME=patchmon-agent
 BUILD_DIR=build
-# Get version from git tags, fallback to "dev" if not available
-VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+# Use hardcoded version instead of git tags
+VERSION=1.3.0
 # Strip debug info and set version variable
 LDFLAGS=-ldflags "-s -w -X patchmon-agent/internal/version.Version=$(VERSION)"
+# Disable VCS stamping
+BUILD_FLAGS=-buildvcs=false
 
 # Go variables
 GOBASE=$(shell pwd)
@@ -21,17 +23,17 @@ all: build
 build:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	@go build $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME) ./cmd/patchmon-agent
+	@go build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME) ./cmd/patchmon-agent
 
 # Build for multiple architectures
 .PHONY: build-all
 build-all:
 	@echo "Building for multiple architectures..."
 	@mkdir -p $(BUILD_DIR)
-	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-amd64 ./cmd/patchmon-agent
-	@GOOS=linux GOARCH=386 go build $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-386 ./cmd/patchmon-agent
-	@GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-arm64 ./cmd/patchmon-agent
-	@GOOS=linux GOARCH=arm go build $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-arm64 ./cmd/patchmon-agent
+	@GOOS=linux GOARCH=amd64 go build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-amd64 ./cmd/patchmon-agent
+	@GOOS=linux GOARCH=386 go build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-386 ./cmd/patchmon-agent
+	@GOOS=linux GOARCH=arm64 go build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-arm64 ./cmd/patchmon-agent
+	@GOOS=linux GOARCH=arm go build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-arm ./cmd/patchmon-agent
 
 # Install dependencies
 .PHONY: deps

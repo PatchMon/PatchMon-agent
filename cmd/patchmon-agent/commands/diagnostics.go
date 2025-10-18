@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strings"
 
-	"patchmon-agent/internal/crontab"
 	"patchmon-agent/internal/system"
 	"patchmon-agent/internal/utils"
 	"patchmon-agent/internal/version"

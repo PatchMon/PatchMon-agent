@@ -1,4 +1,4 @@
 package version
 
 // Version represents the current version of the patchmon-agent
-const Version = "0.1.0"
+const Version = "1.3.0"

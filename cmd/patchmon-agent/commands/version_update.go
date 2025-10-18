@@ -139,7 +139,7 @@ func updateAgent() error {
 	}
 
 	// Verify the new executable works
-	testCmd := exec.Command(tempPath, "--version")
+	testCmd := exec.Command(tempPath, "check-version")
 	if err := testCmd.Run(); err != nil {
 		if removeErr := os.Remove(tempPath); removeErr != nil {
 			logger.WithError(removeErr).Warn("Failed to remove temporary file after validation failure")
