@@ -161,12 +161,13 @@ func updateAgent() error {
 
 // getServerVersionInfo fetches version information from the PatchMon server
 func getServerVersionInfo() (*ServerVersionInfo, error) {
-	cfg, err := config.LoadConfig()
-	if err != nil {
+	cfgManager := config.New()
+	if err := cfgManager.LoadConfig(); err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
+	cfg := cfgManager.GetConfig()
 
-	url := fmt.Sprintf("%s/api/v1/agent/version", cfg.ServerURL)
+	url := fmt.Sprintf("%s/api/v1/agent/version", cfg.PatchmonServer)
 
 	ctx, cancel := context.WithTimeout(context.Background(), serverTimeout)
 	defer cancel()
@@ -202,13 +203,14 @@ func getServerVersionInfo() (*ServerVersionInfo, error) {
 
 // getLatestBinaryFromServer fetches the latest binary information from the PatchMon server
 func getLatestBinaryFromServer() (*ServerVersionResponse, error) {
-	cfg, err := config.LoadConfig()
-	if err != nil {
+	cfgManager := config.New()
+	if err := cfgManager.LoadConfig(); err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
+	cfg := cfgManager.GetConfig()
 
 	architecture := getArchitecture()
-	url := fmt.Sprintf("%s/api/v1/agent/latest/%s", cfg.ServerURL, architecture)
+	url := fmt.Sprintf("%s/api/v1/agent/latest/%s", cfg.PatchmonServer, architecture)
 
 	ctx, cancel := context.WithTimeout(context.Background(), serverTimeout)
 	defer cancel()
