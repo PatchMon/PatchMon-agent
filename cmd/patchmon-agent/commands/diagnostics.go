@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strings"
 
-	"patchmon-agent/internal/crontab"
 	"patchmon-agent/internal/system"
 	"patchmon-agent/internal/utils"
 	"patchmon-agent/internal/version"
@@ -39,8 +38,6 @@ func showDiagnostics() error {
 	osType, osVersion, err := systemDetector.DetectOS()
 	if err != nil {
 		fmt.Printf("  OS: %s (detection failed: %v)\n", runtime.GOOS, err)
-		osType = runtime.GOOS
-		osVersion = "unknown"
 	} else {
 		fmt.Printf("  OS: %s %s\n", osType, osVersion)
 	}
@@ -81,16 +78,6 @@ func showDiagnostics() error {
 		fmt.Printf("  ✅ Credentials file exists\n")
 	} else {
 		fmt.Printf("  ❌ Credentials file not found\n")
-	}
-	fmt.Printf("\n")
-
-	// Crontab Status
-	fmt.Printf("Crontab Status:\n")
-	cronManager := crontab.New(logger)
-	if crontabSchedule := cronManager.GetSchedule(); crontabSchedule != "" {
-		fmt.Printf("  ✅ Schedule installed: %s\n", crontabSchedule)
-	} else {
-		fmt.Printf("  ❌ Schedule not installed\n")
 	}
 	fmt.Printf("\n")
 

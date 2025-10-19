@@ -87,6 +87,7 @@ type ReportPayload struct {
 	GatewayIP         string             `json:"gatewayIp"`
 	DNSServers        []string           `json:"dnsServers"`
 	NetworkInterfaces []NetworkInterface `json:"networkInterfaces"`
+	ExecutionTime     float64            `json:"executionTime"` // Collection time in seconds
 }
 
 // PingResponse represents server ping response

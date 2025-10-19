@@ -1,15 +1,17 @@
 package commands
 
 import (
-	"fmt"
-	"os"
+    "fmt"
+    "os"
+    "path/filepath"
 
-	"patchmon-agent/internal/config"
-	"patchmon-agent/internal/constants"
-	"patchmon-agent/internal/version"
+    "patchmon-agent/internal/config"
+    "patchmon-agent/internal/constants"
+    "patchmon-agent/internal/version"
 
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
+    "github.com/sirupsen/logrus"
+    "github.com/spf13/cobra"
+    lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
@@ -51,8 +53,7 @@ func init() {
 	rootCmd.AddCommand(pingCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(checkVersionCmd)
-	rootCmd.AddCommand(updateAgentCmd)
-	rootCmd.AddCommand(updateCrontabCmd)
+    rootCmd.AddCommand(updateAgentCmd)
 	rootCmd.AddCommand(diagnosticsCmd)
 	rootCmd.AddCommand(uninstallCmd)
 }
@@ -67,9 +68,18 @@ func initialiseAgent() {
 		TimestampFormat:  "2006-01-02T15:04:05",
 	})
 
-	// Initialise configuration manager
-	cfgManager = config.New()
-	cfgManager.SetConfigFile(configFile)
+    // Initialise configuration manager
+    cfgManager = config.New()
+    cfgManager.SetConfigFile(configFile)
+
+    // Load config early to determine log file path
+    _ = cfgManager.LoadConfig()
+    logFile := cfgManager.GetConfig().LogFile
+    if logFile == "" {
+        logFile = config.DefaultLogFile
+    }
+    _ = os.MkdirAll(filepath.Dir(logFile), 0755)
+    logger.SetOutput(&lumberjack.Logger{Filename: logFile, MaxSize: 10, MaxBackups: 5, MaxAge: 14, Compress: true})
 }
 
 // updateLogLevel sets the logger level based on the flag value

@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"patchmon-agent/internal/client"
 	"patchmon-agent/internal/hardware"
@@ -32,6 +33,8 @@ var reportCmd = &cobra.Command{
 }
 
 func sendReport() error {
+	// Start tracking execution time
+	startTime := time.Now()
 	logger.Debug("Starting report process")
 
 	// Load API credentials to send report
@@ -80,7 +83,7 @@ func sendReport() error {
 
 	// Get package information
 	logger.Info("Collecting package information...")
-	packageList, err := packageMgr.GetPackages(osType)
+	packageList, err := packageMgr.GetPackages()
 	if err != nil {
 		return fmt.Errorf("failed to get packages: %w", err)
 	}
@@ -117,7 +120,7 @@ func sendReport() error {
 
 	// Get repository information
 	logger.Info("Collecting repository information...")
-	repoList, err := repoMgr.GetRepositories(osType)
+	repoList, err := repoMgr.GetRepositories()
 	if err != nil {
 		logger.WithError(err).Warn("Failed to get repositories")
 		repoList = []models.Repository{}
@@ -131,6 +134,10 @@ func sendReport() error {
 			"enabled": repo.IsEnabled,
 		}).Debug("Repository info")
 	}
+
+	// Calculate execution time (in seconds, with millisecond precision)
+	executionTime := time.Since(startTime).Seconds()
+	logger.WithField("execution_time_seconds", executionTime).Debug("Data collection completed")
 
 	// Create payload
 	payload := &models.ReportPayload{
@@ -155,6 +162,7 @@ func sendReport() error {
 		GatewayIP:         networkInfo.GatewayIP,
 		DNSServers:        networkInfo.DNSServers,
 		NetworkInterfaces: networkInfo.NetworkInterfaces,
+		ExecutionTime:     executionTime,
 	}
 
 	// Send report

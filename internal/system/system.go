@@ -18,6 +18,17 @@ import (
 	"patchmon-agent/pkg/models"
 )
 
+// OSReleaseInfo holds parsed information from /etc/os-release
+type OSReleaseInfo struct {
+	Name            string
+	PrettyName      string
+	Version         string
+	VersionID       string
+	ID              string
+	IDLike          string
+	VersionCodename string
+}
+
 // Detector handles system information detection
 type Detector struct {
 	logger *logrus.Logger
@@ -30,27 +41,105 @@ func New(logger *logrus.Logger) *Detector {
 	}
 }
 
-// DetectOS detects the operating system and version
-func (d *Detector) DetectOS() (osType, osVersion string, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	info, err := host.InfoWithContext(ctx)
+// parseOSRelease parses /etc/os-release file and returns OS information
+func (d *Detector) parseOSRelease() (*OSReleaseInfo, error) {
+	file, err := os.Open("/etc/os-release")
 	if err != nil {
-		d.logger.WithError(err).Warn("Failed to get host info")
-		return "", "", err
+		return nil, fmt.Errorf("failed to open /etc/os-release: %w", err)
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			// Log error but don't fail the function
+			fmt.Printf("Warning: failed to close file: %v\n", err)
+		}
+	}()
+
+	info := &OSReleaseInfo{}
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := parts[0]
+		value := strings.Trim(parts[1], "\"'")
+
+		switch key {
+		case "NAME":
+			info.Name = value
+		case "PRETTY_NAME":
+			info.PrettyName = value
+		case "VERSION":
+			info.Version = value
+		case "VERSION_ID":
+			info.VersionID = value
+		case "ID":
+			info.ID = value
+		case "ID_LIKE":
+			info.IDLike = value
+		case "VERSION_CODENAME":
+			info.VersionCodename = value
+		}
 	}
 
-	osType = info.Platform
-	osVersion = info.PlatformVersion
-
-	// Map OS variations to their appropriate categories
-	switch osType {
-	case constants.OSTypePop, constants.OSTypeMint, constants.OSTypeElementary:
-		osType = constants.OSTypeUbuntu
-	case constants.OSTypeRHEL, constants.OSTypeRocky, constants.OSTypeAlma, constants.OSTypeCentOS:
-		osType = constants.OSTypeRHEL
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("failed to scan /etc/os-release: %w", err)
 	}
+
+	return info, nil
+}
+
+// DetectOS detects the operating system and version using /etc/os-release
+func (d *Detector) DetectOS() (osType, osVersion string, err error) {
+	// Try to parse /etc/os-release first
+	osReleaseInfo, err := d.parseOSRelease()
+	if err != nil {
+		d.logger.WithError(err).Warn("Failed to parse /etc/os-release, falling back to gopsutil")
+
+		// Fallback to gopsutil
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		info, err := host.InfoWithContext(ctx)
+		if err != nil {
+			d.logger.WithError(err).Warn("Failed to get host info")
+			return "", "", err
+		}
+
+		osType = info.Platform
+		osVersion = info.PlatformVersion
+
+		return osType, osVersion, nil
+	}
+
+	// Use NAME for OS type (e.g., "Pop!_OS", "Debian GNU/Linux", "Rocky Linux")
+	osType = osReleaseInfo.Name
+	if osType == "" {
+		osType = "Unknown"
+	}
+
+	// Use VERSION for OS version (e.g., "22.04 LTS", "12 (bookworm)", "10.0 (Red Quartz)")
+	osVersion = osReleaseInfo.Version
+	if osVersion == "" {
+		osVersion = "Unknown"
+	}
+
+	d.logger.WithFields(logrus.Fields{
+		"name":          osReleaseInfo.Name,
+		"version":       osReleaseInfo.Version,
+		"version_id":    osReleaseInfo.VersionID,
+		"id":            osReleaseInfo.ID,
+		"id_like":       osReleaseInfo.IDLike,
+		"final_type":    osType,
+		"final_version": osVersion,
+	}).Debug("Parsed OS release information")
 
 	return osType, osVersion, nil
 }
@@ -58,6 +147,9 @@ func (d *Detector) DetectOS() (osType, osVersion string, err error) {
 // GetSystemInfo gets additional system information
 func (d *Detector) GetSystemInfo() models.SystemInfo {
 	d.logger.Debug("Beginning system information collection")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	info := models.SystemInfo{
 		KernelVersion: d.GetKernelVersion(),
