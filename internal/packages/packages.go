@@ -3,7 +3,6 @@ package packages
 import (
 	"fmt"
 	"os/exec"
-	"strings"
 
 	"patchmon-agent/pkg/models"
 
@@ -29,40 +28,20 @@ func New(logger *logrus.Logger) *Manager {
 	}
 }
 
-// GetPackages gets package information based on OS type
-func (m *Manager) GetPackages(osType string) ([]models.Package, error) {
-	// Convert OS type to lowercase for comparison
-	osTypeLower := strings.ToLower(osType)
-	
-	// Check for Debian-based distributions (APT)
-	if strings.Contains(osTypeLower, "debian") || 
-	   strings.Contains(osTypeLower, "ubuntu") || 
-	   strings.Contains(osTypeLower, "pop") || 
-	   strings.Contains(osTypeLower, "mint") || 
-	   strings.Contains(osTypeLower, "elementary") ||
-	   strings.Contains(osTypeLower, "kali") ||
-	   strings.Contains(osTypeLower, "parrot") {
+// GetPackages gets package information based on detected package manager
+func (m *Manager) GetPackages() ([]models.Package, error) {
+	packageManager := m.detectPackageManager()
+
+	m.logger.WithField("package_manager", packageManager).Debug("Detected package manager")
+
+	switch packageManager {
+	case "apt":
 		return m.aptManager.GetPackages(), nil
-	}
-	
-	// Check for RHEL-based distributions (DNF/YUM)
-	if strings.Contains(osTypeLower, "rhel") || 
-	   strings.Contains(osTypeLower, "centos") || 
-	   strings.Contains(osTypeLower, "rocky") || 
-	   strings.Contains(osTypeLower, "alma") || 
-	   strings.Contains(osTypeLower, "fedora") ||
-	   strings.Contains(osTypeLower, "red hat") {
+	case "dnf", "yum":
 		return m.dnfManager.GetPackages(), nil
+	default:
+		return nil, fmt.Errorf("unsupported package manager: %s", packageManager)
 	}
-	
-	// Fallback: try to detect package manager directly
-	if m.detectPackageManager() == "apt" {
-		return m.aptManager.GetPackages(), nil
-	} else if m.detectPackageManager() == "dnf" || m.detectPackageManager() == "yum" {
-		return m.dnfManager.GetPackages(), nil
-	}
-	
-	return nil, fmt.Errorf("unsupported OS type: %s", osType)
 }
 
 // detectPackageManager detects which package manager is available on the system
@@ -74,7 +53,7 @@ func (m *Manager) detectPackageManager() string {
 	if _, err := exec.LookPath("apt-get"); err == nil {
 		return "apt"
 	}
-	
+
 	// Check for DNF/YUM
 	if _, err := exec.LookPath("dnf"); err == nil {
 		return "dnf"
@@ -82,7 +61,7 @@ func (m *Manager) detectPackageManager() string {
 	if _, err := exec.LookPath("yum"); err == nil {
 		return "yum"
 	}
-	
+
 	return "unknown"
 }
 

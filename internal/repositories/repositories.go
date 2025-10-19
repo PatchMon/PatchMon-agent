@@ -1,7 +1,8 @@
 package repositories
 
 import (
-	"patchmon-agent/internal/constants"
+	"os/exec"
+
 	"patchmon-agent/pkg/models"
 
 	"github.com/sirupsen/logrus"
@@ -23,16 +24,41 @@ func New(logger *logrus.Logger) *Manager {
 	}
 }
 
-// GetRepositories gets repository information based on OS type
-func (m *Manager) GetRepositories(osType string) ([]models.Repository, error) {
-	switch osType {
-	case constants.OSTypeUbuntu, constants.OSTypeDebian:
+// GetRepositories gets repository information based on detected package manager
+func (m *Manager) GetRepositories() ([]models.Repository, error) {
+	packageManager := m.detectPackageManager()
+
+	m.logger.WithField("package_manager", packageManager).Debug("Detected package manager")
+
+	switch packageManager {
+	case "apt":
 		return m.aptManager.GetRepositories()
-	case constants.OSTypeCentOS, constants.OSTypeRHEL, constants.OSTypeFedora, constants.OSTypeRocky, constants.OSTypeAlma:
+	case "dnf", "yum":
 		repos := m.dnfManager.GetRepositories()
 		return repos, nil
 	default:
-		// Return empty slice for unsupported OS types
+		m.logger.WithField("package_manager", packageManager).Warn("Unsupported package manager")
 		return []models.Repository{}, nil
 	}
+}
+
+// detectPackageManager detects which package manager is available on the system
+func (m *Manager) detectPackageManager() string {
+	// Check for APT first
+	if _, err := exec.LookPath("apt"); err == nil {
+		return "apt"
+	}
+	if _, err := exec.LookPath("apt-get"); err == nil {
+		return "apt"
+	}
+
+	// Check for DNF/YUM
+	if _, err := exec.LookPath("dnf"); err == nil {
+		return "dnf"
+	}
+	if _, err := exec.LookPath("yum"); err == nil {
+		return "yum"
+	}
+
+	return "unknown"
 }

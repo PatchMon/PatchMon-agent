@@ -83,7 +83,7 @@ func sendReport() error {
 
 	// Get package information
 	logger.Info("Collecting package information...")
-	packageList, err := packageMgr.GetPackages(osType)
+	packageList, err := packageMgr.GetPackages()
 	if err != nil {
 		return fmt.Errorf("failed to get packages: %w", err)
 	}
@@ -120,7 +120,7 @@ func sendReport() error {
 
 	// Get repository information
 	logger.Info("Collecting repository information...")
-	repoList, err := repoMgr.GetRepositories(osType)
+	repoList, err := repoMgr.GetRepositories()
 	if err != nil {
 		logger.WithError(err).Warn("Failed to get repositories")
 		repoList = []models.Repository{}
