@@ -38,8 +38,6 @@ func showDiagnostics() error {
 	osType, osVersion, err := systemDetector.DetectOS()
 	if err != nil {
 		fmt.Printf("  OS: %s (detection failed: %v)\n", runtime.GOOS, err)
-		osType = runtime.GOOS
-		osVersion = "unknown"
 	} else {
 		fmt.Printf("  OS: %s %s\n", osType, osVersion)
 	}

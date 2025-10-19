@@ -20,12 +20,12 @@ import (
 
 // OSReleaseInfo holds parsed information from /etc/os-release
 type OSReleaseInfo struct {
-	Name         string
-	PrettyName   string
-	Version      string
-	VersionID    string
-	ID           string
-	IDLike       string
+	Name            string
+	PrettyName      string
+	Version         string
+	VersionID       string
+	ID              string
+	IDLike          string
 	VersionCodename string
 }
 
@@ -47,7 +47,12 @@ func (d *Detector) parseOSRelease() (*OSReleaseInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open /etc/os-release: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			// Log error but don't fail the function
+			fmt.Printf("Warning: failed to close file: %v\n", err)
+		}
+	}()
 
 	info := &OSReleaseInfo{}
 	scanner := bufio.NewScanner(file)
@@ -97,7 +102,7 @@ func (d *Detector) DetectOS() (osType, osVersion string, err error) {
 	osReleaseInfo, err := d.parseOSRelease()
 	if err != nil {
 		d.logger.WithError(err).Warn("Failed to parse /etc/os-release, falling back to gopsutil")
-		
+
 		// Fallback to gopsutil
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -127,25 +132,24 @@ func (d *Detector) DetectOS() (osType, osVersion string, err error) {
 	}
 
 	d.logger.WithFields(logrus.Fields{
-		"name":        osReleaseInfo.Name,
-		"version":     osReleaseInfo.Version,
-		"version_id":  osReleaseInfo.VersionID,
-		"id":          osReleaseInfo.ID,
-		"id_like":     osReleaseInfo.IDLike,
-		"final_type":  osType,
+		"name":          osReleaseInfo.Name,
+		"version":       osReleaseInfo.Version,
+		"version_id":    osReleaseInfo.VersionID,
+		"id":            osReleaseInfo.ID,
+		"id_like":       osReleaseInfo.IDLike,
+		"final_type":    osType,
 		"final_version": osVersion,
 	}).Debug("Parsed OS release information")
 
 	return osType, osVersion, nil
 }
 
-
 // GetSystemInfo gets additional system information
 func (d *Detector) GetSystemInfo() models.SystemInfo {
 	d.logger.Debug("Beginning system information collection")
 
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-    defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	info := models.SystemInfo{
 		KernelVersion: d.GetKernelVersion(),
