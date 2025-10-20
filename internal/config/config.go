@@ -16,7 +16,7 @@ const (
 	DefaultAPIVersion      = "v1"
 	DefaultConfigFile      = "/etc/patchmon/config.yml"
 	DefaultCredentialsFile = "/etc/patchmon/credentials.yml"
-    DefaultLogFile         = "/etc/patchmon/logs/patchmon-agent.log"
+	DefaultLogFile         = "/etc/patchmon/logs/patchmon-agent.log"
 	DefaultLogLevel        = "info"
 	CronFilePath           = "/etc/cron.d/patchmon-agent"
 )

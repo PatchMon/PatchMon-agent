@@ -282,40 +282,6 @@ func getLatestBinaryFromServer() (*ServerVersionResponse, error) {
 	}, nil
 }
 
-// downloadBinaryFromServer downloads a binary from the PatchMon server
-func downloadBinaryFromServer(url string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("User-Agent", fmt.Sprintf("patchmon-agent/%s", version.Version))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			logger.WithError(closeErr).Debug("Failed to close response body")
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	return data, nil
-}
-
 // getArchitecture returns the architecture string for the current platform
 func getArchitecture() string {
 	return runtime.GOARCH
