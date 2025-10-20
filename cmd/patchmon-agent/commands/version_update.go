@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ type ServerVersionResponse struct {
 	Size         int64  `json:"size"`
 	Hash         string `json:"hash"`
 	DownloadURL  string `json:"downloadUrl"`
+	BinaryData   []byte `json:"-"` // Binary data (not serialized to JSON)
 }
 
 type ServerVersionInfo struct {
@@ -81,11 +83,10 @@ func checkVersion() error {
 		logger.Info("Agent update available!")
 		fmt.Printf("  Current version: %s\n", currentVersion)
 		fmt.Printf("  Latest version: %s\n", latestVersion)
-		fmt.Printf("  Last checked: %s\n", versionInfo.LastChecked)
-
 		fmt.Printf("\nTo update, run: patchmon-agent update-agent\n")
 	} else {
 		logger.WithField("version", currentVersion).Info("Agent is up to date")
+		fmt.Printf("Agent is up to date (version %s)\n", currentVersion)
 	}
 
 	return nil
@@ -108,12 +109,12 @@ func updateAgent() error {
 
 	logger.WithField("version", binaryInfo.Version).Info("Found latest version")
 
-	logger.WithField("url", binaryInfo.DownloadURL).Info("Downloading latest agent...")
+	logger.Info("Using downloaded agent binary...")
 
-	// Download new version
-	newAgentData, err := downloadBinaryFromServer(binaryInfo.DownloadURL)
-	if err != nil {
-		return fmt.Errorf("failed to download new agent: %w", err)
+	// Use the binary data directly from the server response
+	newAgentData := binaryInfo.BinaryData
+	if len(newAgentData) == 0 {
+		return fmt.Errorf("no binary data received from server")
 	}
 
 	// Create backup of current executable
@@ -148,6 +149,14 @@ func updateAgent() error {
 
 	logger.WithField("version", binaryInfo.Version).Info("Agent updated successfully")
 
+	// Restart the systemd service to pick up the new binary
+	logger.Info("Restarting patchmon-agent service...")
+	if err := restartService(); err != nil {
+		logger.WithError(err).Warn("Failed to restart service (this is not critical)")
+	} else {
+		logger.Info("Service restarted successfully")
+	}
+
 	// Send updated information to PatchMon
 	logger.Info("Sending updated information to PatchMon...")
 	if err := sendReport(); err != nil {
@@ -167,7 +176,15 @@ func getServerVersionInfo() (*ServerVersionInfo, error) {
 	}
 	cfg := cfgManager.GetConfig()
 
-	url := fmt.Sprintf("%s/api/v1/agent/version", cfg.PatchmonServer)
+	// Load credentials for API authentication
+	if err := cfgManager.LoadCredentials(); err != nil {
+		return nil, fmt.Errorf("failed to load credentials: %w", err)
+	}
+	credentials := cfgManager.GetCredentials()
+
+	architecture := getArchitecture()
+	currentVersion := strings.TrimPrefix(version.Version, "v")
+	url := fmt.Sprintf("%s/api/v1/hosts/agent/version?arch=%s&type=go&currentVersion=%s", cfg.PatchmonServer, architecture, currentVersion)
 
 	ctx, cancel := context.WithTimeout(context.Background(), serverTimeout)
 	defer cancel()
@@ -178,6 +195,8 @@ func getServerVersionInfo() (*ServerVersionInfo, error) {
 	}
 
 	req.Header.Set("User-Agent", fmt.Sprintf("patchmon-agent/%s", version.Version))
+	req.Header.Set("X-API-ID", credentials.APIID)
+	req.Header.Set("X-API-KEY", credentials.APIKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -209,8 +228,14 @@ func getLatestBinaryFromServer() (*ServerVersionResponse, error) {
 	}
 	cfg := cfgManager.GetConfig()
 
+	// Load credentials for API authentication
+	if err := cfgManager.LoadCredentials(); err != nil {
+		return nil, fmt.Errorf("failed to load credentials: %w", err)
+	}
+	credentials := cfgManager.GetCredentials()
+
 	architecture := getArchitecture()
-	url := fmt.Sprintf("%s/api/v1/agent/latest/%s", cfg.PatchmonServer, architecture)
+	url := fmt.Sprintf("%s/api/v1/hosts/agent/download?arch=%s", cfg.PatchmonServer, architecture)
 
 	ctx, cancel := context.WithTimeout(context.Background(), serverTimeout)
 	defer cancel()
@@ -221,6 +246,8 @@ func getLatestBinaryFromServer() (*ServerVersionResponse, error) {
 	}
 
 	req.Header.Set("User-Agent", fmt.Sprintf("patchmon-agent/%s", version.Version))
+	req.Header.Set("X-API-ID", credentials.APIID)
+	req.Header.Set("X-API-KEY", credentials.APIKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -236,51 +263,28 @@ func getLatestBinaryFromServer() (*ServerVersionResponse, error) {
 		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
 
-	var binaryInfo ServerVersionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&binaryInfo); err != nil {
-		return nil, fmt.Errorf("failed to decode binary info: %w", err)
-	}
-
-	return &binaryInfo, nil
-}
-
-// downloadBinaryFromServer downloads a binary from the PatchMon server
-func downloadBinaryFromServer(url string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	// Read the binary data
+	binaryData, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read binary data: %w", err)
 	}
 
-	req.Header.Set("User-Agent", fmt.Sprintf("patchmon-agent/%s", version.Version))
+	// Calculate hash
+	hash := fmt.Sprintf("%x", sha256.Sum256(binaryData))
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			logger.WithError(closeErr).Debug("Failed to close response body")
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	return data, nil
+	return &ServerVersionResponse{
+		Version:      version.Version, // We'll get the actual version from the server later
+		Architecture: architecture,
+		Size:         int64(len(binaryData)),
+		Hash:         hash,
+		DownloadURL:  url,
+		BinaryData:   binaryData, // Store the binary data directly
+	}, nil
 }
 
 // getArchitecture returns the architecture string for the current platform
 func getArchitecture() string {
-	return fmt.Sprintf("linux-%s", runtime.GOARCH)
+	return runtime.GOARCH
 }
 
 // copyFile copies a file from src to dst
@@ -291,6 +295,21 @@ func copyFile(src, dst string) error {
 	}
 
 	return os.WriteFile(dst, data, 0755)
+}
+
+// restartService restarts the patchmon-agent systemd service
+func restartService() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "systemctl", "restart", "patchmon-agent")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to restart service: %w, output: %s", err, string(output))
+	}
+
+	logger.WithField("output", string(output)).Debug("Service restart command completed")
+	return nil
 }
 
 // Removed update-crontab command (cron is no longer used)

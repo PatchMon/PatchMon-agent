@@ -13,6 +13,10 @@ BUILD_FLAGS=-buildvcs=false
 # Go variables
 GOBASE=$(shell pwd)
 GOBIN=$(GOBASE)/$(BUILD_DIR)
+# Use full path to go binary to avoid PATH issues when running as root
+GO_CMD=/usr/local/bin/go/bin/go
+# Use full path to golangci-lint binary to avoid PATH issues when running as root
+GOLANGCI_LINT_CMD=/home/ibrahim/go/bin/golangci-lint
 
 # Default target
 .PHONY: all
@@ -23,49 +27,49 @@ all: build
 build:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	@go build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME) ./cmd/patchmon-agent
+	@$(GO_CMD) build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME) ./cmd/patchmon-agent
 
 # Build for multiple architectures
 .PHONY: build-all
 build-all:
 	@echo "Building for multiple architectures..."
 	@mkdir -p $(BUILD_DIR)
-	@GOOS=linux GOARCH=amd64 go build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-amd64 ./cmd/patchmon-agent
-	@GOOS=linux GOARCH=386 go build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-386 ./cmd/patchmon-agent
-	@GOOS=linux GOARCH=arm64 go build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-arm64 ./cmd/patchmon-agent
-	@GOOS=linux GOARCH=arm go build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-arm ./cmd/patchmon-agent
+	@GOOS=linux GOARCH=amd64 $(GO_CMD) build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-amd64 ./cmd/patchmon-agent
+	@GOOS=linux GOARCH=386 $(GO_CMD) build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-386 ./cmd/patchmon-agent
+	@GOOS=linux GOARCH=arm64 $(GO_CMD) build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-arm64 ./cmd/patchmon-agent
+	@GOOS=linux GOARCH=arm $(GO_CMD) build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-arm ./cmd/patchmon-agent
 
 # Install dependencies
 .PHONY: deps
 deps:
 	@echo "Installing dependencies..."
-	@go mod download
-	@go mod tidy
+	@$(GO_CMD) mod download
+	@$(GO_CMD) mod tidy
 
 # Run tests
 .PHONY: test
 test:
 	@echo "Running tests..."
-	@go test -v ./...
+	@$(GO_CMD) test -v ./...
 
 # Run tests with coverage
 .PHONY: test-coverage
 test-coverage:
 	@echo "Running tests with coverage..."
-	@go test -v -coverprofile=coverage.out ./...
-	@go tool cover -html=coverage.out -o coverage.html
+	@$(GO_CMD) test -v -coverprofile=coverage.out ./...
+	@$(GO_CMD) tool cover -html=coverage.out -o coverage.html
 
 # Format code
 .PHONY: fmt
 fmt:
 	@echo "Formatting code..."
-	@go fmt ./...
+	@$(GO_CMD) fmt ./...
 
 # Lint code
 .PHONY: lint
 lint:
 	@echo "Linting code..."
-	@golangci-lint run
+	@PATH="/usr/local/bin/go/bin:$$PATH" GOFLAGS="$(BUILD_FLAGS)" $(GOLANGCI_LINT_CMD) run
 
 # Clean build artifacts
 .PHONY: clean
