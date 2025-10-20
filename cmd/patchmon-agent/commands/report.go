@@ -177,7 +177,7 @@ func sendReport() error {
 	logger.Info("Report sent successfully")
 	logger.WithField("count", response.PackagesProcessed).Info("Processed packages")
 
-	// Handle agent auto-update
+	// Handle agent auto-update (server-initiated)
 	if response.AutoUpdate != nil && response.AutoUpdate.ShouldUpdate {
 		logger.WithFields(logrus.Fields{
 			"current": response.AutoUpdate.CurrentVersion,
@@ -190,6 +190,26 @@ func sendReport() error {
 			logger.WithError(err).Warn("PatchMon agent update failed, but data was sent successfully")
 		} else {
 			logger.Info("PatchMon agent update completed successfully")
+		}
+	} else {
+		// Proactive update check after report
+		logger.Info("Checking for agent updates...")
+		versionInfo, err := getServerVersionInfo()
+		if err != nil {
+			logger.WithError(err).Warn("Failed to check for updates after report")
+		} else if versionInfo.HasUpdate {
+			logger.WithFields(logrus.Fields{
+				"current": versionInfo.CurrentVersion,
+				"latest":  versionInfo.LatestVersion,
+			}).Info("Update available, automatically updating...")
+
+			if err := updateAgent(); err != nil {
+				logger.WithError(err).Warn("PatchMon agent update failed, but data was sent successfully")
+			} else {
+				logger.Info("PatchMon agent update completed successfully")
+			}
+		} else {
+			logger.WithField("version", versionInfo.CurrentVersion).Debug("Agent is up to date")
 		}
 	}
 
