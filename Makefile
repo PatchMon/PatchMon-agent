@@ -4,7 +4,7 @@
 BINARY_NAME=patchmon-agent
 BUILD_DIR=build
 # Use hardcoded version instead of git tags
-VERSION=1.3.0
+VERSION=1.3.1
 # Strip debug info and set version variable
 LDFLAGS=-ldflags "-s -w -X patchmon-agent/internal/version.Version=$(VERSION)"
 # Disable VCS stamping

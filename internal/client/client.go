@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -30,9 +31,18 @@ func New(configMgr *config.Manager, logger *logrus.Logger) *Client {
 	// Configure Resty to use our logger
 	client.SetLogger(logger)
 
+	// Configure TLS based on skip_ssl_verify setting
+	cfg := configMgr.GetConfig()
+	if cfg.SkipSSLVerify {
+		logger.Warn("⚠️  SSL certificate verification is disabled (skip_ssl_verify=true)")
+		client.SetTLSClientConfig(&tls.Config{
+			InsecureSkipVerify: true,
+		})
+	}
+
 	return &Client{
 		client:      client,
-		config:      configMgr.GetConfig(),
+		config:      cfg,
 		credentials: configMgr.GetCredentials(),
 		logger:      logger,
 	}

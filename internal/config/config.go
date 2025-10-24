@@ -150,6 +150,7 @@ func (m *Manager) SaveConfig() error {
 	configViper.Set("credentials_file", m.config.CredentialsFile)
 	configViper.Set("log_file", m.config.LogFile)
 	configViper.Set("log_level", m.config.LogLevel)
+	configViper.Set("skip_ssl_verify", m.config.SkipSSLVerify)
 
 	if err := configViper.WriteConfigAs(m.configFile); err != nil {
 		return fmt.Errorf("error writing config file: %w", err)

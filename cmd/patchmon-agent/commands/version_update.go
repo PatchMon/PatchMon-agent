@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -249,7 +250,20 @@ func getLatestBinaryFromServer() (*ServerVersionResponse, error) {
 	req.Header.Set("X-API-ID", credentials.APIID)
 	req.Header.Set("X-API-KEY", credentials.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	// Configure HTTP client for insecure SSL if needed
+	httpClient := http.DefaultClient
+	if cfg.SkipSSLVerify {
+		logger.Warn("⚠️  SSL certificate verification is disabled for binary download")
+		httpClient = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			},
+		}
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

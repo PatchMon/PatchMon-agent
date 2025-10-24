@@ -161,4 +161,5 @@ type Config struct {
 	CredentialsFile string `yaml:"credentials_file" mapstructure:"credentials_file"`
 	LogFile         string `yaml:"log_file" mapstructure:"log_file"`
 	LogLevel        string `yaml:"log_level" mapstructure:"log_level"`
+	SkipSSLVerify   bool   `yaml:"skip_ssl_verify" mapstructure:"skip_ssl_verify"`
 }

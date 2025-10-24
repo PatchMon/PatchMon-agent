@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -135,7 +136,18 @@ func connectOnce(out chan<- wsMsg) error {
 	header.Set("X-API-ID", apiID)
 	header.Set("X-API-KEY", apiKey)
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	// Configure WebSocket dialer for insecure connections if needed
+	dialer := websocket.DefaultDialer
+	if cfgManager.GetConfig().SkipSSLVerify {
+		dialer = &websocket.Dialer{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+		logger.Warn("⚠️  SSL certificate verification is disabled for WebSocket")
+	}
+
+	conn, _, err := dialer.Dial(wsURL, header)
 	if err != nil {
 		return err
 	}
