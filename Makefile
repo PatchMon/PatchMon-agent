@@ -10,26 +10,42 @@ LDFLAGS=-ldflags "-s -w -X patchmon-agent/internal/version.Version=$(VERSION)"
 # Disable VCS stamping
 BUILD_FLAGS=-buildvcs=false
 
-# Go variables
-GOBASE=$(shell pwd)
-GOBIN=$(GOBASE)/$(BUILD_DIR)
-# Use full path to go binary to avoid PATH issues when running as root
-GO_CMD=/usr/local/go/bin/go
-# Use full path to golangci-lint binary to avoid PATH issues when running as root
-GOLANGCI_LINT_CMD=/usr/local/go/bin/golangci-lint
+#=============================================================================
+# Build Variables
+#=============================================================================
+BINARY_NAME = patchmon-agent
+BUILD_DIR   = build
+VERSION     = 1.3.3
 
-# Default target
+# Build flags
+LDFLAGS     = -ldflags "-s -w -X patchmon-agent/internal/version.Version=$(VERSION)"
+BUILD_FLAGS = -buildvcs=false
+
+#=============================================================================
+# Go Variables
+#=============================================================================
+GOBASE           = $(shell pwd)
+GOBIN            = $(GOBASE)/$(BUILD_DIR)
+GO_CMD          ?= $(shell which go)
+GOLANGCI_LINT_CMD ?= $(shell which golangci-lint || echo /usr/local/go/bin/golangci-lint)
+
+#=============================================================================
+# Targets
+#=============================================================================
+
 .PHONY: all
 all: build
 
-# Build the application
+#------------------------------------------------------------------------------
+# Build Targets
+#------------------------------------------------------------------------------
+
 .PHONY: build
 build:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
 	@CGO_ENABLED=0 $(GO_CMD) build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME) ./cmd/patchmon-agent
 
-# Build for multiple architectures
 .PHONY: build-all
 build-all:
 	@echo "Building for multiple architectures..."
@@ -39,53 +55,53 @@ build-all:
 	@GOOS=linux GOARCH=arm64 CGO_ENABLED=0 $(GO_CMD) build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-arm64 ./cmd/patchmon-agent
 	@GOOS=linux GOARCH=arm CGO_ENABLED=0 $(GO_CMD) build $(BUILD_FLAGS) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME)-linux-arm ./cmd/patchmon-agent
 
-# Install dependencies
+#------------------------------------------------------------------------------
+# Development Targets
+#------------------------------------------------------------------------------
+
 .PHONY: deps
 deps:
 	@echo "Installing dependencies..."
 	@$(GO_CMD) mod download
 	@$(GO_CMD) mod tidy
 
-# Run tests
 .PHONY: test
 test:
 	@echo "Running tests..."
 	@$(GO_CMD) test -v ./...
 
-# Run tests with coverage
 .PHONY: test-coverage
 test-coverage:
 	@echo "Running tests with coverage..."
 	@$(GO_CMD) test -v -coverprofile=coverage.out ./...
 	@$(GO_CMD) tool cover -html=coverage.out -o coverage.html
 
-# Format code
 .PHONY: fmt
 fmt:
 	@echo "Formatting code..."
 	@$(GO_CMD) fmt ./...
 
-# Lint code
 .PHONY: lint
 lint:
 	@echo "Linting code..."
 	@PATH="/usr/local/bin/go/bin:$$PATH" GOFLAGS="$(BUILD_FLAGS)" $(GOLANGCI_LINT_CMD) run
 
-# Clean build artifacts
+#------------------------------------------------------------------------------
+# Maintenance Targets
+#------------------------------------------------------------------------------
+
 .PHONY: clean
 clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf $(BUILD_DIR)
 	@rm -f coverage.out coverage.html
 
-# Install the binary to system
 .PHONY: install
 install: build
 	@echo "Installing $(BINARY_NAME) to /usr/local/bin..."
 	@sudo cp $(GOBIN)/$(BINARY_NAME) /usr/local/bin/
 	@sudo chmod +x /usr/local/bin/$(BINARY_NAME)
 
-# Show help
 .PHONY: help
 help:
 	@echo "Available targets:"
