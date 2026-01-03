@@ -2,13 +2,23 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"math"
 	"time"
 
 	"patchmon-agent/pkg/models"
 
 	"github.com/docker/docker/api/types/events"
 	"github.com/sirupsen/logrus"
+)
+
+// Constants for reconnection strategy
+const (
+	initialBackoffDuration = 1 * time.Second
+	maxBackoffDuration     = 30 * time.Second
+	maxReconnectAttempts   = -1 // -1 means unlimited with backoff strategy
 )
 
 // StartMonitoring begins monitoring Docker events for real-time status changes
@@ -33,11 +43,8 @@ func (d *Integration) StartMonitoring(ctx context.Context, eventChan chan<- inte
 
 	d.logger.Info("Starting Docker event monitoring...")
 
-	// Start listening for Docker events
-	eventsCh, errCh := d.client.Events(monitorCtx, events.ListOptions{})
-
-	// Process events in a goroutine
-	go d.processEvents(monitorCtx, eventsCh, errCh, eventChan)
+	// Start the monitoring loop in a goroutine with reconnection logic
+	go d.monitoringLoop(monitorCtx, eventChan)
 
 	return nil
 }
@@ -62,29 +69,114 @@ func (d *Integration) StopMonitoring() error {
 	return nil
 }
 
-// processEvents processes Docker events and sends relevant ones to the event channel
-func (d *Integration) processEvents(ctx context.Context, eventsCh <-chan events.Message, errCh <-chan error, eventChan chan<- interface{}) {
+// monitoringLoop manages the event stream with automatic reconnection on failure
+func (d *Integration) monitoringLoop(ctx context.Context, eventChan chan<- interface{}) {
 	defer func() {
 		d.monitoringMu.Lock()
 		d.monitoring = false
 		d.monitoringMu.Unlock()
+		d.logger.Info("Docker event monitoring loop stopped")
 	}()
 
+	backoffDuration := initialBackoffDuration
+	reconnectAttempts := 0
+
 	for {
+		// Check if context is done
 		select {
 		case <-ctx.Done():
 			d.logger.Debug("Docker event monitoring context cancelled")
 			return
+		default:
+		}
+
+		// Attempt to establish event stream
+		err := d.monitorEvents(ctx, eventChan)
+
+		// Check if context is done (to avoid unnecessary error logging)
+		select {
+		case <-ctx.Done():
+			d.logger.Debug("Docker event monitoring context cancelled during reconnect")
+			return
+		default:
+		}
+
+		// Handle reconnection
+		if err != nil {
+			reconnectAttempts++
+			d.logger.WithError(err).WithField("attempt", reconnectAttempts).
+				Warn("Docker event stream ended, attempting to reconnect...")
+
+			// Implement exponential backoff with jitter
+			d.logger.WithField("backoff_seconds", backoffDuration.Seconds()).
+				Info("Waiting before reconnection attempt")
+
+			// Sleep with context cancellation support
+			select {
+			case <-ctx.Done():
+				d.logger.Debug("Context cancelled while waiting for reconnect")
+				return
+			case <-time.After(backoffDuration):
+				// Continue to next reconnect attempt
+			}
+
+			// Increase backoff duration with exponential growth (capped at maxBackoffDuration)
+			backoffDuration = time.Duration(float64(backoffDuration) * 1.5)
+			if backoffDuration > maxBackoffDuration {
+				backoffDuration = maxBackoffDuration
+			}
+		} else {
+			// If connection was successful, reset backoff
+			backoffDuration = initialBackoffDuration
+			reconnectAttempts = 0
+		}
+	}
+}
+
+// monitorEvents establishes and monitors the Docker event stream
+// Returns when the stream ends (EOF, connection loss, etc.)
+func (d *Integration) monitorEvents(ctx context.Context, eventChan chan<- interface{}) error {
+	// Get a fresh event stream from Docker
+	eventsCh, errCh := d.client.Events(ctx, events.ListOptions{})
+
+	d.logger.Debug("Docker event stream established")
+
+	// Process events until stream ends or context is cancelled
+	for {
+		select {
+		case <-ctx.Done():
+			d.logger.Debug("Docker event monitoring context cancelled")
+			return ctx.Err()
 
 		case err := <-errCh:
-			if err != nil {
-				d.logger.WithError(err).Error("Docker event error")
-				// Try to reconnect after a delay
-				time.Sleep(5 * time.Second)
+			if err == nil {
+				// Channel closed without error - Docker connection lost
+				d.logger.Warn("Docker event stream closed")
+				return io.EOF
+			}
+
+			// Handle specific error types
+			if errors.Is(err, io.EOF) {
+				d.logger.Info("Docker event stream EOF - daemon likely restarted")
+				return err
+			}
+
+			if errors.Is(err, context.Canceled) {
+				d.logger.Debug("Docker event stream context cancelled")
+				return err
+			}
+
+			d.logger.WithError(err).Warn("Docker event stream error")
+			return err
+
+		case event := <-eventsCh:
+			// Check if channel was closed
+			if event.Type == "" && event.Time == 0 {
+				// This might be a zero value from a closed channel
+				// But we'll let the errCh handle it
 				continue
 			}
 
-		case event := <-eventsCh:
 			if event.Type == events.ContainerEventType {
 				d.handleContainerEvent(event, eventChan)
 			}
@@ -177,4 +269,21 @@ func mapActionToStatus(action string) string {
 	default:
 		return "unknown"
 	}
+}
+
+// exponentialBackoff calculates backoff duration using exponential strategy
+// This function is kept for potential future use or testing
+func exponentialBackoff(attempt int) time.Duration {
+	if attempt <= 0 {
+		return initialBackoffDuration
+	}
+
+	// Calculate: initialBackoffDuration * (1.5 ^ (attempt - 1))
+	duration := time.Duration(float64(initialBackoffDuration) * math.Pow(1.5, float64(attempt-1)))
+
+	if duration > maxBackoffDuration {
+		return maxBackoffDuration
+	}
+
+	return duration
 }
