@@ -231,6 +231,7 @@ func (d *Detector) getLatestKernelFromRPM() string {
 }
 
 // getLatestKernelFromDpkg queries dpkg for installed kernel packages
+// FIXED: Now properly handles virtual meta-packages like linux-image-virtual
 func (d *Detector) getLatestKernelFromDpkg() string {
 	// Check if dpkg command exists
 	if _, err := exec.LookPath("dpkg"); err != nil {
@@ -245,7 +246,8 @@ func (d *Detector) getLatestKernelFromDpkg() string {
 	}
 
 	var latestVersion string
-	lines := strings.Split(string(output), "\n")
+	lines := strings.Split(string(output), "
+")
 	for _, line := range lines {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
@@ -259,8 +261,32 @@ func (d *Detector) getLatestKernelFromDpkg() string {
 			pkgName := fields[1]
 			version := strings.TrimPrefix(pkgName, "linux-image-")
 
-			// Skip meta packages
-			if version == "generic" || version == "lowlatency" {
+			// Skip meta packages (virtual, generic, lowlatency, cloud, etc.)
+			// These are wrappers that depend on actual kernel packages
+			metaPackages := map[string]bool{
+				"virtual": true, "generic": true, "lowlatency": true,
+				"cloud": true, "generic-hwe": true,
+			}
+
+			// Check if this is a meta-package
+			isMetaPackage := false
+			if metaPackages[version] {
+				isMetaPackage = true
+			} else if strings.HasPrefix(version, "generic-") {
+				// Handles generic-hwe-22.04, etc.
+				isMetaPackage = true
+			}
+
+			if isMetaPackage {
+				// Try to resolve the meta-package to its actual kernel
+				resolvedVersion := d.resolveMetaPackageKernel(pkgName)
+				if resolvedVersion != "" {
+					latestVersion = resolvedVersion
+					d.logger.WithFields(map[string]interface{}{
+						"metaPackage":     pkgName,
+						"resolvedVersion": resolvedVersion,
+					}).Debug("Resolved kernel meta-package to actual kernel")
+				}
 				continue
 			}
 
@@ -269,4 +295,48 @@ func (d *Detector) getLatestKernelFromDpkg() string {
 	}
 
 	return latestVersion
+}
+
+// resolveMetaPackageKernel resolves a meta-package (like linux-image-virtual)
+// to its actual kernel package version by using apt-cache depends
+func (d *Detector) resolveMetaPackageKernel(metaPackage string) string {
+	// Check if apt-cache command exists
+	if _, err := exec.LookPath("apt-cache"); err != nil {
+		d.logger.Debug("apt-cache command not found, cannot resolve meta-package")
+		return ""
+	}
+
+	// Use apt-cache depends to find dependencies
+	cmd := exec.Command("apt-cache", "depends", "--no-recommends", "--no-suggests", metaPackage)
+	output, err := cmd.Output()
+	if err != nil {
+		d.logger.WithError(err).Debug("Failed to resolve meta-package dependencies")
+		return ""
+	}
+
+	// Parse output for actual linux-image-* packages
+	// Expected format:
+	// linux-image-virtual
+	//   Depends: linux-image-6.8.0-88-generic
+	lines := strings.Split(string(output), "
+")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// Look for the Depends: line with actual kernel package
+		if strings.HasPrefix(line, "Depends:") && strings.Contains(line, "linux-image-") {
+			// Extract package name after "Depends:"
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				kernelPkg := parts[1]
+				// Extract version from linux-image-X.Y.Z-BUILD-VARIANT
+				version := strings.TrimPrefix(kernelPkg, "linux-image-")
+				if version != "" && version != kernelPkg {
+					return version
+				}
+			}
+		}
+	}
+
+	d.logger.WithField("metaPackage", metaPackage).Debug("Could not resolve meta-package to actual kernel")
+	return ""
 }
