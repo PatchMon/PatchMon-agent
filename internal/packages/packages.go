@@ -97,6 +97,7 @@ func CombinePackageData(installedPackages map[string]models.Package, upgradableP
 		if !upgradableMap[packageName] {
 			packages = append(packages, models.Package{
 				Name:             pkg.Name,
+				Description:      pkg.Description,
 				CurrentVersion:   pkg.CurrentVersion,
 				NeedsUpdate:      false,
 				IsSecurityUpdate: false,

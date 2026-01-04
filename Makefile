@@ -12,7 +12,7 @@ BUILD_FLAGS=-buildvcs=false
 GOBASE=$(shell pwd)
 GOBIN=$(GOBASE)/$(BUILD_DIR)
 # Use full path to go binary to avoid PATH issues when running as root
-GO_CMD=/usr/bin/go
+GO_CMD=/usr/local/go/bin/go
 # Use full path to golangci-lint binary to avoid PATH issues when running as root
 GOLANGCI_LINT_CMD=/root/go/bin/golangci-lint
 
