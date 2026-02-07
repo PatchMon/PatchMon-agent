@@ -3,8 +3,17 @@ package utils
 import (
 	"fmt"
 	"net"
+	"os"
+	"strings"
 	"time"
 )
+
+// IsProductionEnvironment checks if the agent is running in a production environment
+// SECURITY: Used to block insecure configurations in production
+func IsProductionEnvironment() bool {
+	env := strings.ToLower(os.Getenv("PATCHMON_ENV"))
+	return env == "production" || env == "prod"
+}
 
 // TcpPing performs a simple TCP connection test to the specified host and port
 func TcpPing(host, port string) bool {

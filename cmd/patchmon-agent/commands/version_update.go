@@ -2,8 +2,10 @@ package commands
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,9 +15,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"patchmon-agent/internal/config"
+	"patchmon-agent/internal/utils"
 	"patchmon-agent/internal/version"
 
 	"github.com/spf13/cobra"
@@ -43,6 +47,7 @@ type ServerVersionInfo struct {
 	AutoUpdateDisabledReason string   `json:"autoUpdateDisabledReason"`
 	LastChecked              string   `json:"lastChecked"`
 	SupportedArchitectures   []string `json:"supportedArchitectures"`
+	Hash                     string   `json:"hash"` // SHA256 hash for integrity verification
 }
 
 // checkVersionCmd represents the check-version command
@@ -163,6 +168,24 @@ func updateAgent() error {
 	if len(newAgentData) == 0 {
 		return fmt.Errorf("no binary data received from server")
 	}
+
+	// SECURITY: Verify binary integrity against server-provided hash
+	// This prevents supply chain attacks where binary could be tampered during download
+	// SECURITY: Hash verification is MANDATORY for binary integrity
+	if versionInfo == nil || versionInfo.Hash == "" {
+		logger.Error("Server did not provide hash for binary verification - refusing to update")
+		return fmt.Errorf("binary hash not provided by server - refusing to update without integrity verification (update your PatchMon server)")
+	}
+
+	actualHash := fmt.Sprintf("%x", sha256.Sum256(newAgentData))
+	if actualHash != versionInfo.Hash {
+		logger.WithFields(map[string]interface{}{
+			"expected": versionInfo.Hash,
+			"actual":   actualHash,
+		}).Error("Binary hash verification failed - possible tampering detected")
+		return fmt.Errorf("binary hash mismatch: expected %s, got %s", versionInfo.Hash, actualHash)
+	}
+	logger.WithField("hash", actualHash).Info("Binary integrity verified successfully")
 
 	// Get the new version from server version info (more reliable than parsing binary output)
 	newVersion := currentVersion // Default to current if we can't determine
@@ -311,8 +334,20 @@ func getServerVersionInfo() (*ServerVersionInfo, error) {
 		},
 	}
 
-	// Configure for insecure SSL if needed
+	// SECURITY: Configure for insecure SSL if needed (NOT RECOMMENDED)
+	// Even with hash verification, TLS provides important protections
 	if cfg.SkipSSLVerify {
+		// SECURITY: Block skip_ssl_verify in production environments
+		if utils.IsProductionEnvironment() {
+			logger.Error("╔══════════════════════════════════════════════════════════════════╗")
+			logger.Error("║  SECURITY ERROR: skip_ssl_verify is BLOCKED in production!       ║")
+			logger.Error("║  Set PATCHMON_ENV to 'development' to enable insecure mode.      ║")
+			logger.Error("║  This setting cannot be used when PATCHMON_ENV=production        ║")
+			logger.Error("╚══════════════════════════════════════════════════════════════════╝")
+			return nil, fmt.Errorf("skip_ssl_verify is blocked in production environment")
+		}
+
+		logger.Warn("⚠️  TLS verification disabled for version check - NOT RECOMMENDED")
 		httpClient.Transport = &http.Transport{
 			ResponseHeaderTimeout: 5 * time.Second,
 			TLSClientConfig: &tls.Config{
@@ -372,10 +407,29 @@ func getLatestBinaryFromServer() (*ServerVersionResponse, error) {
 	req.Header.Set("X-API-ID", credentials.APIID)
 	req.Header.Set("X-API-KEY", credentials.APIKey)
 
-	// Configure HTTP client for insecure SSL if needed
+	// SECURITY: Configure HTTP client for insecure SSL if needed
+	// WARNING: This is dangerous for binary downloads even with hash verification!
+	// An attacker could provide both a malicious binary AND a matching hash.
+	// TLS ensures we're talking to the legitimate server.
 	httpClient := http.DefaultClient
 	if cfg.SkipSSLVerify {
-		logger.Warn("⚠️  SSL certificate verification is disabled for binary download")
+		// SECURITY: Block skip_ssl_verify in production environments
+		if utils.IsProductionEnvironment() {
+			logger.Error("╔══════════════════════════════════════════════════════════════════╗")
+			logger.Error("║  SECURITY ERROR: skip_ssl_verify is BLOCKED in production!       ║")
+			logger.Error("║  Set PATCHMON_ENV to 'development' to enable insecure mode.      ║")
+			logger.Error("║  This setting cannot be used when PATCHMON_ENV=production        ║")
+			logger.Error("╚══════════════════════════════════════════════════════════════════╝")
+			return nil, fmt.Errorf("skip_ssl_verify is blocked in production environment")
+		}
+
+		logger.Error("╔══════════════════════════════════════════════════════════════════╗")
+		logger.Error("║  CRITICAL: TLS verification DISABLED for binary download!        ║")
+		logger.Error("║  This is a severe security risk - MITM attacks are possible.     ║")
+		logger.Error("║  Hash verification provides some protection, but TLS ensures     ║")
+		logger.Error("║  you're communicating with the legitimate server.                ║")
+		logger.Error("║  Use a valid TLS certificate in production!                      ║")
+		logger.Error("╚══════════════════════════════════════════════════════════════════╝")
 		httpClient = &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
@@ -399,10 +453,20 @@ func getLatestBinaryFromServer() (*ServerVersionResponse, error) {
 		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
 
-	// Read the binary data
-	binaryData, err := io.ReadAll(resp.Body)
+	// SECURITY: Limit binary download size to prevent DoS attacks
+	// Max 100MB should be more than enough for the agent binary
+	const maxBinarySize = 100 * 1024 * 1024
+	limitedReader := io.LimitReader(resp.Body, maxBinarySize+1)
+
+	// Read the binary data with size limit
+	binaryData, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read binary data: %w", err)
+	}
+
+	// Check if we hit the size limit (read more than maxBinarySize)
+	if int64(len(binaryData)) > maxBinarySize {
+		return nil, fmt.Errorf("binary size exceeds maximum allowed (%d MB)", maxBinarySize/(1024*1024))
 	}
 
 	// Calculate hash
@@ -430,7 +494,8 @@ func copyFile(src, dst string) error {
 		return err
 	}
 
-	return os.WriteFile(dst, data, 0755)
+	// SECURITY: Use 0700 for backup files (owner-only access)
+	return os.WriteFile(dst, data, 0700)
 }
 
 // cleanupOldBackups removes old backup files, keeping only the last 3
@@ -523,8 +588,8 @@ func checkRecentUpdate() error {
 func markRecentUpdate() {
 	updateMarkerPath := "/etc/patchmon/.last_update_timestamp"
 
-	// Ensure directory exists
-	if err := os.MkdirAll("/etc/patchmon", 0755); err != nil {
+	// SECURITY: Ensure directory exists with restrictive permissions
+	if err := os.MkdirAll("/etc/patchmon", 0700); err != nil {
 		logger.WithError(err).Debug("Could not create /etc/patchmon directory (non-critical)")
 		return
 	}
@@ -558,12 +623,19 @@ func restartService(executablePath, expectedVersion string) error {
 		// Instead, we'll create a helper script that runs after we exit
 		logger.Debug("Detected systemd, scheduling service restart via helper script")
 
-		// Ensure /etc/patchmon directory exists
-		if err := os.MkdirAll("/etc/patchmon", 0755); err != nil {
+		// SECURITY: Ensure /etc/patchmon directory exists with restrictive permissions
+		// Using 0700 to prevent other users from reading/writing to this directory
+		if err := os.MkdirAll("/etc/patchmon", 0700); err != nil {
 			logger.WithError(err).Warn("Failed to create /etc/patchmon directory, will try anyway")
 		}
 
 		// Create a helper script that will restart the service after we exit
+		// SECURITY: TOCTOU mitigation measures:
+		// 1) Use random suffix to prevent predictable paths
+		// 2) Use O_EXCL flag for atomic creation (fail if file exists)
+		// 3) 0700 permissions on dir and file (owner-only)
+		// 4) Script is deleted immediately after execution
+		// 5) Verify no symlink attacks before execution
 		helperScript := `#!/bin/sh
 # Wait a moment for the current process to exit
 sleep 2
@@ -572,27 +644,69 @@ systemctl restart patchmon-agent 2>&1 || systemctl start patchmon-agent 2>&1
 # Clean up this script
 rm -f "$0"
 `
-		helperPath := "/etc/patchmon/patchmon-restart-helper.sh"
-		if err := os.WriteFile(helperPath, []byte(helperScript), 0755); err != nil {
+		// Generate random suffix to prevent predictable path attacks
+		randomBytes := make([]byte, 8)
+		if _, err := rand.Read(randomBytes); err != nil {
+			logger.WithError(err).Warn("Failed to generate random suffix, using fallback")
+			randomBytes = []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+		}
+		helperPath := filepath.Join("/etc/patchmon", fmt.Sprintf("restart-%s.sh", hex.EncodeToString(randomBytes)))
+
+		// SECURITY: Verify the directory is not a symlink (prevent symlink attacks)
+		dirInfo, err := os.Lstat("/etc/patchmon")
+		if err == nil && dirInfo.Mode()&os.ModeSymlink != 0 {
+			logger.Warn("Security: /etc/patchmon is a symlink, refusing to create helper script")
+			os.Exit(0) // Fall through to exit approach
+		}
+
+		// SECURITY: Use O_EXCL to atomically create file (fail if exists - prevents race conditions)
+		file, err := os.OpenFile(helperPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0700)
+		if err != nil {
 			logger.WithError(err).Warn("Failed to create restart helper script, will exit and rely on systemd auto-restart")
 			// Fall through to exit approach
 		} else {
-			// Execute the helper script in background (detached from current process)
-			// Use 'sh -c' with nohup to ensure it runs after we exit
-			cmd := exec.Command("sh", "-c", fmt.Sprintf("nohup %s > /dev/null 2>&1 &", helperPath))
-			if err := cmd.Start(); err != nil {
-				logger.WithError(err).Warn("Failed to start restart helper script, will exit and rely on systemd auto-restart")
-				// Clean up script
-				if removeErr := os.Remove(helperPath); removeErr != nil {
-					logger.WithError(removeErr).Debug("Failed to remove helper script")
-				}
+			// Write the script content to the file
+			if _, err := file.WriteString(helperScript); err != nil {
+				logger.WithError(err).Warn("Failed to write restart helper script")
+				file.Close()
+				os.Remove(helperPath)
 				// Fall through to exit approach
 			} else {
-				logger.Info("Scheduled service restart via helper script, exiting now...")
-				// Give the helper script a moment to start
-				time.Sleep(500 * time.Millisecond)
-				// Exit gracefully - the helper script will restart the service
-				os.Exit(0)
+				file.Close()
+
+				// SECURITY: Verify the file we're about to execute is the one we created
+				// Check it's a regular file, not a symlink that was swapped in
+				fileInfo, err := os.Lstat(helperPath)
+				if err != nil || fileInfo.Mode()&os.ModeSymlink != 0 {
+					logger.Warn("Security: helper script may have been tampered with, refusing to execute")
+					os.Remove(helperPath)
+					os.Exit(0)
+				}
+
+				// Execute the helper script in background (detached from current process)
+				// SECURITY: Avoid shell interpretation by executing directly with nohup
+				cmd := exec.Command("nohup", helperPath)
+				cmd.Stdout = nil
+				cmd.Stderr = nil
+				// Detach from parent process group to ensure script continues after we exit
+				cmd.SysProcAttr = &syscall.SysProcAttr{
+					Setpgid: true,
+					Pgid:    0,
+				}
+				if err := cmd.Start(); err != nil {
+					logger.WithError(err).Warn("Failed to start restart helper script, will exit and rely on systemd auto-restart")
+					// Clean up script
+					if removeErr := os.Remove(helperPath); removeErr != nil {
+						logger.WithError(removeErr).Debug("Failed to remove helper script")
+					}
+					// Fall through to exit approach
+				} else {
+					logger.Info("Scheduled service restart via helper script, exiting now...")
+					// Give the helper script a moment to start
+					time.Sleep(500 * time.Millisecond)
+					// Exit gracefully - the helper script will restart the service
+					os.Exit(0)
+				}
 			}
 		}
 
@@ -608,12 +722,19 @@ rm -f "$0"
 		// Instead, we'll create a helper script that runs after we exit
 		logger.Debug("Detected OpenRC, scheduling service restart via helper script")
 
-		// Ensure /etc/patchmon directory exists
-		if err := os.MkdirAll("/etc/patchmon", 0755); err != nil {
+		// SECURITY: Ensure /etc/patchmon directory exists with restrictive permissions
+		// Using 0700 to prevent other users from reading/writing to this directory
+		if err := os.MkdirAll("/etc/patchmon", 0700); err != nil {
 			logger.WithError(err).Warn("Failed to create /etc/patchmon directory, will try anyway")
 		}
 
 		// Create a helper script that will restart the service after we exit
+		// SECURITY: TOCTOU mitigation measures:
+		// 1) Use random suffix to prevent predictable paths
+		// 2) Use O_EXCL flag for atomic creation (fail if file exists)
+		// 3) 0700 permissions on dir and file (owner-only)
+		// 4) Script is deleted immediately after execution
+		// 5) Verify no symlink attacks before execution
 		helperScript := `#!/bin/sh
 # Wait a moment for the current process to exit
 sleep 2
@@ -622,27 +743,69 @@ rc-service patchmon-agent restart 2>&1 || rc-service patchmon-agent start 2>&1
 # Clean up this script
 rm -f "$0"
 `
-		helperPath := "/etc/patchmon/patchmon-restart-helper.sh"
-		if err := os.WriteFile(helperPath, []byte(helperScript), 0755); err != nil {
+		// Generate random suffix to prevent predictable path attacks
+		randomBytes := make([]byte, 8)
+		if _, err := rand.Read(randomBytes); err != nil {
+			logger.WithError(err).Warn("Failed to generate random suffix, using fallback")
+			randomBytes = []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+		}
+		helperPath := filepath.Join("/etc/patchmon", fmt.Sprintf("restart-%s.sh", hex.EncodeToString(randomBytes)))
+
+		// SECURITY: Verify the directory is not a symlink (prevent symlink attacks)
+		dirInfo, err := os.Lstat("/etc/patchmon")
+		if err == nil && dirInfo.Mode()&os.ModeSymlink != 0 {
+			logger.Warn("Security: /etc/patchmon is a symlink, refusing to create helper script")
+			os.Exit(0) // Fall through to exit approach
+		}
+
+		// SECURITY: Use O_EXCL to atomically create file (fail if exists - prevents race conditions)
+		file, err := os.OpenFile(helperPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0700)
+		if err != nil {
 			logger.WithError(err).Warn("Failed to create restart helper script, will exit and rely on OpenRC auto-restart")
 			// Fall through to exit approach
 		} else {
-			// Execute the helper script in background (detached from current process)
-			// Use 'sh -c' with nohup to ensure it runs after we exit
-			cmd := exec.Command("sh", "-c", fmt.Sprintf("nohup %s > /dev/null 2>&1 &", helperPath))
-			if err := cmd.Start(); err != nil {
-				logger.WithError(err).Warn("Failed to start restart helper script, will exit and rely on OpenRC auto-restart")
-				// Clean up script
-				if removeErr := os.Remove(helperPath); removeErr != nil {
-					logger.WithError(removeErr).Debug("Failed to remove helper script")
-				}
+			// Write the script content to the file
+			if _, err := file.WriteString(helperScript); err != nil {
+				logger.WithError(err).Warn("Failed to write restart helper script")
+				file.Close()
+				os.Remove(helperPath)
 				// Fall through to exit approach
 			} else {
-				logger.Info("Scheduled service restart via helper script, exiting now...")
-				// Give the helper script a moment to start
-				time.Sleep(500 * time.Millisecond)
-				// Exit gracefully - the helper script will restart the service
-				os.Exit(0)
+				file.Close()
+
+				// SECURITY: Verify the file we're about to execute is the one we created
+				// Check it's a regular file, not a symlink that was swapped in
+				fileInfo, err := os.Lstat(helperPath)
+				if err != nil || fileInfo.Mode()&os.ModeSymlink != 0 {
+					logger.Warn("Security: helper script may have been tampered with, refusing to execute")
+					os.Remove(helperPath)
+					os.Exit(0)
+				}
+
+				// Execute the helper script in background (detached from current process)
+				// SECURITY: Avoid shell interpretation by executing directly with nohup
+				cmd := exec.Command("nohup", helperPath)
+				cmd.Stdout = nil
+				cmd.Stderr = nil
+				// Detach from parent process group to ensure script continues after we exit
+				cmd.SysProcAttr = &syscall.SysProcAttr{
+					Setpgid: true,
+					Pgid:    0,
+				}
+				if err := cmd.Start(); err != nil {
+					logger.WithError(err).Warn("Failed to start restart helper script, will exit and rely on OpenRC auto-restart")
+					// Clean up script
+					if removeErr := os.Remove(helperPath); removeErr != nil {
+						logger.WithError(removeErr).Debug("Failed to remove helper script")
+					}
+					// Fall through to exit approach
+				} else {
+					logger.Info("Scheduled service restart via helper script, exiting now...")
+					// Give the helper script a moment to start
+					time.Sleep(500 * time.Millisecond)
+					// Exit gracefully - the helper script will restart the service
+					os.Exit(0)
+				}
 			}
 		}
 

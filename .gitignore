@@ -32,3 +32,6 @@ go.work.sum
 # .vscode/
 
 build/
+
+# AI encryption key
+.encryption_key

@@ -1,6 +1,6 @@
-# PatchMon Agent
+# PatchMonEnhanced Agent
 
-PatchMon's monitoring agent sends package and repository information to the PatchMon server.
+PatchMonEnhanced's monitoring agent sends package and repository information to the PatchMonEnhanced server.
 
 ## Installation
 
@@ -180,7 +180,7 @@ Logs are written to `/var/log/patchmon-agent.log` with timestamps and structured
 ```
 2023-09-27T10:30:00 level=info msg="Collecting package information..."
 2023-09-27T10:30:01 level=info msg="Found packages" count=156
-2023-09-27T10:30:02 level=info msg="Sending report to PatchMon server..."
+2023-09-27T10:30:02 level=info msg="Sending report to PatchMonEnhanced server..."
 2023-09-27T10:30:03 level=info msg="Report sent successfully"
 ```
 
@@ -232,7 +232,7 @@ The Go implementation maintains compatibility with the existing shell script wor
 
 1. **Same command structure**: All commands work identically
 2. **Same configuration files**: Uses the same paths and formats
-3. **Same API compatibility**: Works with existing PatchMon servers
+3. **Same API compatibility**: Works with existing PatchMonEnhanced servers
 4. **Improved performance**: Faster execution and better error handling
 
 To migrate:

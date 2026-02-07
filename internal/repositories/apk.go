@@ -59,7 +59,7 @@ func (m *APKManager) GetRepositories() ([]models.Repository, error) {
 // findRepoFile locates the APK repositories file
 func (m *APKManager) findRepoFile() (string, error) {
 	repoFile := "/etc/apk/repositories"
-	
+
 	// Check if file exists
 	if _, err := os.Stat(repoFile); err != nil {
 		if os.IsNotExist(err) {
@@ -91,7 +91,7 @@ func (m *APKManager) parseRepoFile(filename string) ([]models.Repository, error)
 	// Regex to match repository URL pattern
 	// Matches: http://... or https://... followed by path
 	urlRegex := regexp.MustCompile(`^(@\S+\s+)?(https?://[^\s]+)`)
-	
+
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -161,7 +161,7 @@ func (m *APKManager) parseRepoLine(line string, urlRegex *regexp.Regexp) *models
 func (m *APKManager) extractDistributionAndComponents(url string) (distribution, components string) {
 	// Split URL by "/"
 	parts := strings.Split(url, "/")
-	
+
 	// Find "alpine" in the path
 	alpineIndex := -1
 	for i, part := range parts {
@@ -229,4 +229,3 @@ func (m *APKManager) isValidRepoURL(url string) bool {
 func (m *APKManager) isSecureURL(url string) bool {
 	return strings.HasPrefix(url, "https://")
 }
-

@@ -8,19 +8,8 @@ const (
 	SELinuxEnforcing  = "enforcing" // Will be mapped to enabled for API compatibility
 )
 
-// OS type constants
-const (
-	OSTypeDebian     = "debian"
-	OSTypeUbuntu     = "ubuntu"
-	OSTypeRHEL       = "rhel"
-	OSTypeCentOS     = "centos"
-	OSTypeFedora     = "fedora"
-	OSTypeRocky      = "rocky"
-	OSTypeAlma       = "almalinux"
-	OSTypePop        = "pop"
-	OSTypeMint       = "linuxmint"
-	OSTypeElementary = "elementary"
-)
+// Note: OS type detection uses string literals directly in system package
+// These constants are reserved for future use if needed
 
 // Architecture constants
 const (
@@ -36,7 +25,6 @@ const (
 	NetTypeEthernet = "ethernet"
 	NetTypeWiFi     = "wifi"
 	NetTypeBridge   = "bridge"
-	NetTypeLoopback = "loopback"
 )
 
 // IP address families

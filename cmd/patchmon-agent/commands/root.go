@@ -24,8 +24,9 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "patchmon-agent",
-	Short: "PatchMon Agent for package monitoring",
+	Use:     "patchmon-agent",
+	Short:   "PatchMon Agent for package monitoring",
+	Version: version.Version,
 	Long: `PatchMon Agent v` + version.Version + `
 
 A monitoring agent that sends package information to PatchMon.`,
@@ -87,7 +88,8 @@ func initialiseAgent() {
 	if logFile == "" {
 		logFile = config.DefaultLogFile
 	}
-	_ = os.MkdirAll(filepath.Dir(logFile), 0755)
+	// SECURITY: Use 0750 for log directory (no world access)
+	_ = os.MkdirAll(filepath.Dir(logFile), 0750)
 	logger.SetOutput(&lumberjack.Logger{Filename: logFile, MaxSize: 10, MaxBackups: 5, MaxAge: 14, Compress: true})
 }
 
@@ -132,4 +134,3 @@ func checkRoot() error {
 	}
 	return nil
 }
-

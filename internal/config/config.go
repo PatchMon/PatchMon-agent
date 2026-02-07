@@ -142,7 +142,7 @@ func (m *Manager) LoadCredentials() error {
 	return nil
 }
 
-// SaveCredentials saves API credentials to file
+// SaveCredentials saves API credentials to file using atomic write to prevent TOCTOU race
 func (m *Manager) SaveCredentials(apiID, apiKey string) error {
 	if err := m.setupDirectories(); err != nil {
 		return err
@@ -153,17 +153,57 @@ func (m *Manager) SaveCredentials(apiID, apiKey string) error {
 		APIKey: apiKey,
 	}
 
-	credViper := viper.New()
-	credViper.Set("api_id", m.credentials.APIID)
-	credViper.Set("api_key", m.credentials.APIKey)
+	// Generate YAML content manually to avoid viper's default file creation
+	content := fmt.Sprintf("api_id: %s\napi_key: %s\n", apiID, apiKey)
 
-	if err := credViper.WriteConfigAs(m.config.CredentialsFile); err != nil {
-		return fmt.Errorf("error writing credentials file: %w", err)
+	// Use atomic write pattern to prevent TOCTOU race condition:
+	// 1. Write to temp file with secure permissions from the start
+	// 2. Atomically rename to target file
+	dir := filepath.Dir(m.config.CredentialsFile)
+
+	// Create temp file in same directory (required for atomic rename)
+	// Use O_CREATE|O_EXCL to prevent race on temp file creation
+	// File is created with 0600 permissions from the start
+	tmpFile, err := os.CreateTemp(dir, ".credentials-*.tmp")
+	if err != nil {
+		return fmt.Errorf("error creating temp credentials file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	// Clean up temp file on any error
+	defer func() {
+		if tmpFile != nil {
+			tmpFile.Close()
+		}
+		// Remove temp file if it still exists (rename failed or error occurred)
+		os.Remove(tmpPath)
+	}()
+
+	// Set secure permissions on temp file before writing content
+	if err := tmpFile.Chmod(0600); err != nil {
+		return fmt.Errorf("error setting temp file permissions: %w", err)
 	}
 
-	// Set restrictive permissions
-	if err := os.Chmod(m.config.CredentialsFile, 0600); err != nil {
-		return fmt.Errorf("error setting credentials file permissions: %w", err)
+	// Write credentials to temp file
+	if _, err := tmpFile.WriteString(content); err != nil {
+		return fmt.Errorf("error writing credentials to temp file: %w", err)
+	}
+
+	// Ensure data is flushed to disk before rename
+	if err := tmpFile.Sync(); err != nil {
+		return fmt.Errorf("error syncing temp file: %w", err)
+	}
+
+	// Close the file before rename (required on some systems)
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("error closing temp file: %w", err)
+	}
+	tmpFile = nil // Prevent double-close in defer
+
+	// Atomic rename - this is the only operation that exposes the file
+	// Since we set permissions before writing, no race window exists
+	if err := os.Rename(tmpPath, m.config.CredentialsFile); err != nil {
+		return fmt.Errorf("error renaming credentials file: %w", err)
 	}
 
 	return nil
@@ -197,6 +237,7 @@ func (m *Manager) SaveConfig() error {
 		}
 	}
 	configViper.Set("integrations", m.config.Integrations)
+	configViper.Set("compliance_on_demand_only", m.config.ComplianceOnDemandOnly)
 
 	if err := configViper.WriteConfigAs(m.configFile); err != nil {
 		return fmt.Errorf("error writing config file: %w", err)
@@ -242,7 +283,20 @@ func (m *Manager) SetIntegrationEnabled(name string, enabled bool) error {
 	return m.SaveConfig()
 }
 
+// IsComplianceOnDemandOnly returns true if compliance should only run on-demand (not during scheduled reports)
+func (m *Manager) IsComplianceOnDemandOnly() bool {
+	return m.config.ComplianceOnDemandOnly
+}
+
+// SetComplianceOnDemandOnly sets whether compliance should only run on-demand
+func (m *Manager) SetComplianceOnDemandOnly(onDemandOnly bool) error {
+	m.config.ComplianceOnDemandOnly = onDemandOnly
+	return m.SaveConfig()
+}
+
 // setupDirectories creates necessary directories
+// SECURITY: Use restrictive permissions (0750) for config directories
+// This prevents unauthorized users from reading agent configuration
 func (m *Manager) setupDirectories() error {
 	dirs := []string{
 		filepath.Dir(m.configFile),
@@ -251,7 +305,8 @@ func (m *Manager) setupDirectories() error {
 	}
 
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		// Use 0750 - owner full access, group read/execute, no world access
+		if err := os.MkdirAll(dir, 0750); err != nil {
 			return fmt.Errorf("error creating directory %s: %w", dir, err)
 		}
 	}

@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"patchmon-agent/internal/client"
 	"patchmon-agent/internal/hardware"
 	"patchmon-agent/internal/integrations"
+	"patchmon-agent/internal/integrations/compliance"
 	"patchmon-agent/internal/integrations/docker"
 	"patchmon-agent/internal/network"
 	"patchmon-agent/internal/packages"
@@ -102,10 +104,10 @@ func sendReport(outputJson bool) error {
 	needsReboot, rebootReason := systemDetector.CheckRebootRequired()
 	installedKernel := systemDetector.GetLatestInstalledKernel()
 	logger.WithFields(logrus.Fields{
-		"needs_reboot":        needsReboot,
-		"reason":              rebootReason,
-		"installed_kernel":    installedKernel,
-		"running_kernel":      systemInfo.KernelVersion,
+		"needs_reboot":     needsReboot,
+		"reason":           rebootReason,
+		"installed_kernel": installedKernel,
+		"running_kernel":   systemInfo.KernelVersion,
 	}).Info("Reboot status check completed")
 
 	// Get package information
@@ -172,31 +174,31 @@ func sendReport(outputJson bool) error {
 
 	// Create payload
 	payload := &models.ReportPayload{
-		Packages:          packageList,
-		Repositories:      repoList,
-		OSType:            osType,
-		OSVersion:         osVersion,
-		Hostname:          hostname,
-		IP:                ipAddress,
-		Architecture:      architecture,
-		AgentVersion:      version.Version,
-		MachineID:             systemDetector.GetMachineID(),
-		KernelVersion:         systemInfo.KernelVersion,
+		Packages:               packageList,
+		Repositories:           repoList,
+		OSType:                 osType,
+		OSVersion:              osVersion,
+		Hostname:               hostname,
+		IP:                     ipAddress,
+		Architecture:           architecture,
+		AgentVersion:           version.Version,
+		MachineID:              systemDetector.GetMachineID(),
+		KernelVersion:          systemInfo.KernelVersion,
 		InstalledKernelVersion: installedKernel,
-		SELinuxStatus:         systemInfo.SELinuxStatus,
-		SystemUptime:      systemInfo.SystemUptime,
-		LoadAverage:       systemInfo.LoadAverage,
-		CPUModel:          hardwareInfo.CPUModel,
-		CPUCores:          hardwareInfo.CPUCores,
-		RAMInstalled:      hardwareInfo.RAMInstalled,
-		SwapSize:          hardwareInfo.SwapSize,
-		DiskDetails:       hardwareInfo.DiskDetails,
-		GatewayIP:         networkInfo.GatewayIP,
-		DNSServers:        networkInfo.DNSServers,
-		NetworkInterfaces: networkInfo.NetworkInterfaces,
-		ExecutionTime:     executionTime,
-		NeedsReboot:       needsReboot,
-		RebootReason:      rebootReason,
+		SELinuxStatus:          systemInfo.SELinuxStatus,
+		SystemUptime:           systemInfo.SystemUptime,
+		LoadAverage:            systemInfo.LoadAverage,
+		CPUModel:               hardwareInfo.CPUModel,
+		CPUCores:               hardwareInfo.CPUCores,
+		RAMInstalled:           hardwareInfo.RAMInstalled,
+		SwapSize:               hardwareInfo.SwapSize,
+		DiskDetails:            hardwareInfo.DiskDetails,
+		GatewayIP:              networkInfo.GatewayIP,
+		DNSServers:             networkInfo.DNSServers,
+		NetworkInterfaces:      networkInfo.NetworkInterfaces,
+		ExecutionTime:          executionTime,
+		NeedsReboot:            needsReboot,
+		RebootReason:           rebootReason,
 	}
 
 	// If --report-json flag is set, output JSON and exit
@@ -241,13 +243,27 @@ func sendReport(outputJson bool) error {
 			return nil
 		}
 	} else {
-		// Proactive update check after report (non-blocking with timeout)
-		// Run in a goroutine to avoid blocking the report completion
+		// Proactive update check after report (with timeout to prevent hanging)
+		// Use a WaitGroup to ensure the goroutine completes before function returns
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
+
+			// Create a context with timeout to prevent indefinite hanging
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+
 			// Add a delay to prevent immediate checks after service restart
 			// This gives the new process time to fully initialize
-			time.Sleep(5 * time.Second)
-			
+			select {
+			case <-time.After(5 * time.Second):
+				// Continue with update check
+			case <-ctx.Done():
+				logger.Debug("Update check cancelled due to timeout")
+				return
+			}
+
 			logger.Info("Checking for agent updates...")
 			versionInfo, err := getServerVersionInfo()
 			if err != nil {
@@ -277,6 +293,8 @@ func sendReport(outputJson bool) error {
 				logger.WithField("version", versionInfo.CurrentVersion).Info("Agent is up to date")
 			}
 		}()
+		// Wait for the update check to complete (with the internal timeout)
+		wg.Wait()
 	}
 
 	// Collect and send integration data (Docker, etc.) separately
@@ -305,11 +323,23 @@ func sendIntegrationData() {
 
 	// Register available integrations
 	integrationMgr.Register(docker.New(logger))
+
+	// Only register compliance integration if not set to on-demand only
+	// When compliance_on_demand_only is true, compliance scans will only run when triggered from the UI
+	if !cfgManager.IsComplianceOnDemandOnly() {
+		complianceInteg := compliance.New(logger)
+		complianceInteg.SetDockerIntegrationEnabled(cfgManager.IsIntegrationEnabled("docker"))
+		integrationMgr.Register(complianceInteg)
+	} else {
+		logger.Info("Skipping compliance scan during scheduled report (compliance_on_demand_only=true)")
+	}
 	// Future: integrationMgr.Register(proxmox.New(logger))
 	// Future: integrationMgr.Register(kubernetes.New(logger))
 
 	// Discover and collect from all available integrations
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// 25 minute timeout to allow OpenSCAP scans to complete (they can take 15+ minutes on complex systems)
+	// This gives time for both OpenSCAP and Docker Bench to complete
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 	defer cancel()
 
 	integrationData := integrationMgr.CollectAll(ctx)
@@ -330,6 +360,11 @@ func sendIntegrationData() {
 	// Send Docker data if available
 	if dockerData, exists := integrationData["docker"]; exists && dockerData.Error == "" {
 		sendDockerData(httpClient, dockerData, hostname, machineID)
+	}
+
+	// Send Compliance data if available
+	if complianceData, exists := integrationData["compliance"]; exists && complianceData.Error == "" {
+		sendComplianceData(httpClient, complianceData, hostname, machineID)
 	}
 
 	// Future: Send other integration data here
@@ -374,4 +409,50 @@ func sendDockerData(httpClient *client.Client, integrationData *models.Integrati
 		"networks":   response.NetworksReceived,
 		"updates":    response.UpdatesFound,
 	}).Info("Docker data sent successfully")
+}
+
+// sendComplianceData sends compliance scan data to server
+func sendComplianceData(httpClient *client.Client, integrationData *models.IntegrationData, hostname, machineID string) {
+	// Extract Compliance data from integration data
+	complianceData, ok := integrationData.Data.(*models.ComplianceData)
+	if !ok {
+		logger.Warn("Failed to extract compliance data from integration")
+		return
+	}
+
+	if len(complianceData.Scans) == 0 {
+		logger.Debug("No compliance scans to send")
+		return
+	}
+
+	payload := &models.CompliancePayload{
+		ComplianceData: *complianceData,
+		Hostname:       hostname,
+		MachineID:      machineID,
+		AgentVersion:   version.Version,
+	}
+
+	totalRules := 0
+	for _, scan := range complianceData.Scans {
+		totalRules += scan.TotalRules
+	}
+
+	logger.WithFields(logrus.Fields{
+		"scans":       len(complianceData.Scans),
+		"total_rules": totalRules,
+	}).Info("Sending compliance data to server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second) // Longer timeout for compliance
+	defer cancel()
+
+	response, err := httpClient.SendComplianceData(ctx, payload)
+	if err != nil {
+		logger.WithError(err).Warn("Failed to send compliance data (will retry on next report)")
+		return
+	}
+
+	logger.WithFields(logrus.Fields{
+		"scans_received": response.ScansReceived,
+		"message":        response.Message,
+	}).Info("Compliance data sent successfully")
 }

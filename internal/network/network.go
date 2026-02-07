@@ -160,7 +160,7 @@ func (m *Manager) getNetworkInterfaces() []models.NetworkInterface {
 			if ipnet, ok := addr.(*net.IPNet); ok {
 				var family string
 				var gateway string
-				
+
 				if ipnet.IP.To4() != nil {
 					family = constants.IPFamilyIPv4
 					gateway = ipv4Gateway
@@ -243,7 +243,7 @@ func (m *Manager) getInterfaceGateway(interfaceName string, ipv6 bool) string {
 			// Use ip route (defaults to IPv4)
 			cmd = exec.Command("ip", "route", "show", "dev", interfaceName)
 		}
-		
+
 		output, err := cmd.Output()
 		if err == nil {
 			lines := strings.Split(string(output), "\n")

@@ -15,10 +15,10 @@ import (
 
 // Manager orchestrates integration discovery and data collection
 type Manager struct {
-	integrations      []Integration
-	logger            *logrus.Logger
-	mu                sync.RWMutex
-	isEnabledChecker  func(string) bool // Optional function to check if integration is enabled
+	integrations     []Integration
+	logger           *logrus.Logger
+	mu               sync.RWMutex
+	isEnabledChecker func(string) bool // Optional function to check if integration is enabled
 }
 
 // NewManager creates a new integration manager
