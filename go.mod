@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	github.com/docker/docker v28.5.1+incompatible
-	github.com/go-resty/resty/v2 v2.16.5
+	github.com/go-resty/resty/v2 v2.17.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/shirou/gopsutil/v4 v4.25.9
 	github.com/sirupsen/logrus v1.9.3
