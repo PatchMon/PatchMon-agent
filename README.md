@@ -1,3 +1,7 @@
+# NOTE : SOURCE CODE FOR THE PATCHMON AGENT NOW LIVES IN THE MAIN PATCHMON REPO UNDER agent-source-code
+
+# This Repo is now archived.
+
 # PatchMon Agent
 
 PatchMon's monitoring agent sends package and repository information to the PatchMon server.
