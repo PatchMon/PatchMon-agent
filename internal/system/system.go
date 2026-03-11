@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -96,9 +97,14 @@ func (d *Detector) parseOSRelease() (*OSReleaseInfo, error) {
 	return info, nil
 }
 
-// DetectOS detects the operating system and version using /etc/os-release
+// DetectOS detects the operating system and version
 func (d *Detector) DetectOS() (osType, osVersion string, err error) {
-	// Try to parse /etc/os-release first
+	// Check if running on Windows
+	if runtime.GOOS == "windows" {
+		return d.detectWindowsOS()
+	}
+
+	// Linux/Unix systems - try to parse /etc/os-release first
 	osReleaseInfo, err := d.parseOSRelease()
 	if err != nil {
 		d.logger.WithError(err).Warn("Failed to parse /etc/os-release, falling back to gopsutil")
@@ -140,6 +146,41 @@ func (d *Detector) DetectOS() (osType, osVersion string, err error) {
 		"final_type":    osType,
 		"final_version": osVersion,
 	}).Debug("Parsed OS release information")
+
+	return osType, osVersion, nil
+}
+
+// detectWindowsOS detects Windows OS information using gopsutil
+func (d *Detector) detectWindowsOS() (osType, osVersion string, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	info, err := host.InfoWithContext(ctx)
+	if err != nil {
+		d.logger.WithError(err).Warn("Failed to get Windows host info")
+		return "", "", err
+	}
+
+	// gopsutil returns "Microsoft Windows" or similar for Platform on Windows
+	osType = constants.OSTypeWindows
+	if info.Platform != "" {
+		// Use the platform name, e.g., "Microsoft Windows Server 2022" or "Microsoft Windows 10"
+		osType = info.Platform
+	}
+
+	// PlatformVersion contains the version, e.g., "10.0.19045 Build 19045"
+	osVersion = info.PlatformVersion
+	if osVersion == "" {
+		osVersion = "Unknown"
+	}
+
+	d.logger.WithFields(logrus.Fields{
+		"platform":      info.Platform,
+		"platform_version": info.PlatformVersion,
+		"kernel_version": info.KernelVersion,
+		"final_type":    osType,
+		"final_version": osVersion,
+	}).Debug("Detected Windows OS information")
 
 	return osType, osVersion, nil
 }
@@ -227,8 +268,22 @@ func (d *Detector) GetIPAddress() string {
 	return ""
 }
 
-// GetKernelVersion gets the kernel version
+// GetKernelVersion gets the kernel version (or OS build version on Windows)
 func (d *Detector) GetKernelVersion() string {
+	if runtime.GOOS == "windows" {
+		// On Windows, KernelVersion contains the build number, e.g., "10.0.19045"
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		info, err := host.InfoWithContext(ctx)
+		if err != nil {
+			d.logger.WithError(err).Warn("Failed to get Windows kernel version")
+			return constants.ErrUnknownValue
+		}
+
+		return info.KernelVersion
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -241,8 +296,13 @@ func (d *Detector) GetKernelVersion() string {
 	return info.KernelVersion
 }
 
-// getSELinuxStatus gets SELinux status using file reading
+// getSELinuxStatus gets SELinux status (not applicable on Windows)
 func (d *Detector) getSELinuxStatus() string {
+	if runtime.GOOS == "windows" {
+		// SELinux is Linux-specific
+		return constants.SELinuxDisabled
+	}
+
 	// Try getenforce command first
 	if cmd := exec.Command("getenforce"); cmd != nil {
 		if output, err := cmd.Output(); err == nil {
@@ -303,8 +363,14 @@ func (d *Detector) getSystemUptime(ctx context.Context) string {
 	}
 }
 
-// getLoadAverage gets system load average
+// getLoadAverage gets system load average (Windows returns [0, 0, 0] as it doesn't have load average)
 func (d *Detector) getLoadAverage(ctx context.Context) []float64 {
+	if runtime.GOOS == "windows" {
+		// Windows doesn't have load average in the same way as Unix systems
+		// Return zeros for compatibility
+		return []float64{0, 0, 0}
+	}
+
 	loadAvg, err := load.AvgWithContext(ctx)
 	if err != nil {
 		d.logger.WithError(err).Warn("Failed to get load average")

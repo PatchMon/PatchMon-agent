@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"os/exec"
+	"runtime"
 
 	"patchmon-agent/pkg/models"
 
@@ -10,10 +11,11 @@ import (
 
 // Manager handles repository information collection
 type Manager struct {
-	logger     *logrus.Logger
-	aptManager *APTManager
-	dnfManager *DNFManager
-	apkManager *APKManager
+	logger      *logrus.Logger
+	aptManager  *APTManager
+	dnfManager  *DNFManager
+	apkManager  *APKManager
+	winManager  *WindowsManager
 }
 
 // New creates a new repository manager
@@ -23,6 +25,7 @@ func New(logger *logrus.Logger) *Manager {
 		aptManager: NewAPTManager(logger),
 		dnfManager: NewDNFManager(logger),
 		apkManager: NewAPKManager(logger),
+		winManager: NewWindowsManager(logger),
 	}
 }
 
@@ -33,6 +36,8 @@ func (m *Manager) GetRepositories() ([]models.Repository, error) {
 	m.logger.WithField("package_manager", packageManager).Debug("Detected package manager")
 
 	switch packageManager {
+	case "windows":
+		return m.winManager.GetRepositories()
 	case "apt":
 		return m.aptManager.GetRepositories()
 	case "dnf", "yum":
@@ -48,6 +53,11 @@ func (m *Manager) GetRepositories() ([]models.Repository, error) {
 
 // detectPackageManager detects which package manager is available on the system
 func (m *Manager) detectPackageManager() string {
+	// Check for Windows first
+	if runtime.GOOS == "windows" {
+		return "windows"
+	}
+
 	// Check for APK first (Alpine Linux)
 	if _, err := exec.LookPath("apk"); err == nil {
 		return "apk"

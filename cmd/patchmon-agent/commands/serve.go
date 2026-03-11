@@ -29,7 +29,8 @@ var serveCmd = &cobra.Command{
 		if err := checkRoot(); err != nil {
 			return err
 		}
-		return runService()
+		// Use platform-specific service handling
+		return runAsService()
 	},
 }
 
@@ -37,7 +38,9 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 }
 
-func runService() error {
+// runServiceLoop is the main service loop that handles reports and WebSocket messages
+// stopCh is used to signal shutdown (nil means run forever, for Unix systems)
+func runServiceLoop(stopCh <-chan struct{}) error {
 	if err := cfgManager.LoadCredentials(); err != nil {
 		return err
 	}
@@ -186,8 +189,19 @@ func runService() error {
 	// Track current interval for offset recalculation on updates
 	currentInterval := intervalMinutes
 
+	// Create a stop channel that never closes if none provided (for Unix systems)
+	// This avoids creating a new channel on every select iteration
+	effectiveStopCh := stopCh
+	if effectiveStopCh == nil {
+		effectiveStopCh = make(chan struct{})
+	}
+
 	for {
 		select {
+		case <-effectiveStopCh:
+			// Shutdown requested
+			logger.Info("Shutdown signal received, stopping service...")
+			return nil
 		case <-offsetTimer.C:
 			// Offset period completed, start consuming from ticker normally
 			offsetPassed = true

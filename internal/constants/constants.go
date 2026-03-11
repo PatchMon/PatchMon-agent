@@ -20,6 +20,7 @@ const (
 	OSTypePop        = "pop"
 	OSTypeMint       = "linuxmint"
 	OSTypeElementary = "elementary"
+	OSTypeWindows    = "windows"
 )
 
 // Architecture constants
@@ -51,6 +52,8 @@ const (
 	RepoTypeDebSrc = "deb-src"
 	RepoTypeRPM    = "rpm"
 	RepoTypeAPK    = "apk"
+	RepoTypeWU     = "windows-update" // Windows Update
+	RepoTypeWSUS   = "wsus"           // Windows Server Update Services
 )
 
 // Log level constants

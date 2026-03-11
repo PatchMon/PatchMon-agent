@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -43,8 +44,12 @@ func (m *Manager) GetNetworkInfo() models.NetworkInfo {
 	return info
 }
 
-// getGatewayIP gets the default gateway IP from routing table file
+// getGatewayIP gets the default gateway IP
 func (m *Manager) getGatewayIP() string {
+	if runtime.GOOS == "windows" {
+		return m.getWindowsGatewayIP()
+	}
+
 	// Read /proc/net/route to find default gateway
 	data, err := os.ReadFile("/proc/net/route")
 	if err != nil {
@@ -63,6 +68,21 @@ func (m *Manager) getGatewayIP() string {
 	}
 
 	return ""
+}
+
+// getWindowsGatewayIP gets the default gateway IP on Windows using PowerShell
+func (m *Manager) getWindowsGatewayIP() string {
+	psCmd := `(Get-NetRoute -DestinationPrefix "0.0.0.0/0" | Where-Object {$_.RouteMetric -eq (Get-NetRoute -DestinationPrefix "0.0.0.0/0" | Measure-Object -Property RouteMetric -Minimum).Minimum} | Select-Object -First 1).NextHop`
+
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psCmd)
+	output, err := cmd.Output()
+	if err != nil {
+		m.logger.WithError(err).Debug("Failed to get Windows gateway IP")
+		return ""
+	}
+
+	gateway := strings.TrimSpace(string(output))
+	return gateway
 }
 
 // hexToIP converts hex IP address to dotted decimal notation
@@ -102,10 +122,14 @@ func parseHexByte(hex string) (byte, error) {
 	return result, nil
 }
 
-// getDNSServers gets the configured DNS servers from resolv.conf
+// getDNSServers gets the configured DNS servers
 func (m *Manager) getDNSServers() []string {
 	// Initialize as empty slice (not nil) to ensure JSON marshals as [] instead of null
 	servers := []string{}
+
+	if runtime.GOOS == "windows" {
+		return m.getWindowsDNSServers()
+	}
 
 	// Read /etc/resolv.conf
 	data, err := os.ReadFile("/etc/resolv.conf")
@@ -121,6 +145,35 @@ func (m *Manager) getDNSServers() []string {
 			if len(fields) > 1 {
 				servers = append(servers, fields[1])
 			}
+		}
+	}
+
+	return servers
+}
+
+// getWindowsDNSServers gets DNS servers on Windows using PowerShell
+func (m *Manager) getWindowsDNSServers() []string {
+	servers := []string{}
+
+	psCmd := `(Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {$_.ServerAddresses.Count -gt 0} | Select-Object -First 1).ServerAddresses`
+
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psCmd)
+	output, err := cmd.Output()
+	if err != nil {
+		m.logger.WithError(err).Debug("Failed to get Windows DNS servers")
+		return servers
+	}
+
+	outputStr := strings.TrimSpace(string(output))
+	if outputStr == "" {
+		return servers
+	}
+
+	// Parse DNS servers (could be space or newline separated)
+	for _, server := range strings.Fields(outputStr) {
+		server = strings.TrimSpace(server)
+		if server != "" {
+			servers = append(servers, server)
 		}
 	}
 

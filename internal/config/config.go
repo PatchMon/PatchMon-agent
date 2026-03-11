@@ -6,20 +6,69 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"patchmon-agent/pkg/models"
 
 	"github.com/spf13/viper"
 )
 
-const (
+var (
 	DefaultAPIVersion      = "v1"
-	DefaultConfigFile      = "/etc/patchmon/config.yml"
-	DefaultCredentialsFile = "/etc/patchmon/credentials.yml"
-	DefaultLogFile         = "/etc/patchmon/logs/patchmon-agent.log"
+	DefaultConfigFile      = getDefaultConfigFile()
+	DefaultCredentialsFile = getDefaultCredentialsFile()
+	DefaultLogFile         = getDefaultLogFile()
 	DefaultLogLevel        = "info"
-	CronFilePath           = "/etc/cron.d/patchmon-agent"
+	CronFilePath           = getDefaultCronFile()
 )
+
+// getDefaultConfigFile returns the default config file path based on OS
+func getDefaultConfigFile() string {
+	if runtime.GOOS == "windows" {
+		programData := os.Getenv("ProgramData")
+		if programData == "" {
+			// Fallback to C:\ProgramData if environment variable is not set
+			programData = "C:\\ProgramData"
+		}
+		return filepath.Join(programData, "PatchMon", "config.yml")
+	}
+	return "/etc/patchmon/config.yml"
+}
+
+// getDefaultCredentialsFile returns the default credentials file path based on OS
+func getDefaultCredentialsFile() string {
+	if runtime.GOOS == "windows" {
+		programData := os.Getenv("ProgramData")
+		if programData == "" {
+			// Fallback to C:\ProgramData if environment variable is not set
+			programData = "C:\\ProgramData"
+		}
+		return filepath.Join(programData, "PatchMon", "credentials.yml")
+	}
+	return "/etc/patchmon/credentials.yml"
+}
+
+// getDefaultLogFile returns the default log file path based on OS
+func getDefaultLogFile() string {
+	if runtime.GOOS == "windows" {
+		programData := os.Getenv("ProgramData")
+		if programData == "" {
+			// Fallback to C:\ProgramData if environment variable is not set
+			programData = "C:\\ProgramData"
+		}
+		return filepath.Join(programData, "PatchMon", "patchmon-agent.log")
+	}
+	return "/var/log/patchmon-agent.log"
+}
+
+// getDefaultCronFile returns the default cron file path (Linux only)
+func getDefaultCronFile() string {
+	if runtime.GOOS == "windows" {
+		// Windows doesn't use cron files - this shouldn't be used on Windows
+		return ""
+	}
+	return "/etc/cron.d/patchmon-agent"
+}
 
 // AvailableIntegrations lists all integrations that can be enabled/disabled
 // Add new integrations here as they are implemented
@@ -161,10 +210,13 @@ func (m *Manager) SaveCredentials(apiID, apiKey string) error {
 		return fmt.Errorf("error writing credentials file: %w", err)
 	}
 
-	// Set restrictive permissions
-	if err := os.Chmod(m.config.CredentialsFile, 0600); err != nil {
-		return fmt.Errorf("error setting credentials file permissions: %w", err)
+	// Set restrictive permissions (Unix-style file permissions, ignored on Windows)
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(m.config.CredentialsFile, 0600); err != nil {
+			return fmt.Errorf("error setting credentials file permissions: %w", err)
+		}
 	}
+	// On Windows, file permissions are managed via ACLs, not chmod
 
 	return nil
 }

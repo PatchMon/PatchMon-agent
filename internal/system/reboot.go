@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,6 +13,10 @@ import (
 // CheckRebootRequired checks if the system requires a reboot
 // Returns (needsReboot bool, reason string)
 func (d *Detector) CheckRebootRequired() (bool, string) {
+	if runtime.GOOS == "windows" {
+		return d.checkWindowsRebootRequired()
+	}
+
 	runningKernel := d.getRunningKernel()
 	latestKernel := d.getLatestInstalledKernel()
 
@@ -48,6 +53,29 @@ func (d *Detector) CheckRebootRequired() (bool, string) {
 	return false, ""
 }
 
+// checkWindowsRebootRequired checks if Windows requires a reboot using PowerShell
+func (d *Detector) checkWindowsRebootRequired() (bool, string) {
+	// PowerShell command to check for pending reboot
+	// Checks registry keys that indicate reboot is needed
+	psCmd := `$rebootPending = $false; $reasons = @(); if ((Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name "PendingFileRenameOperations" -ErrorAction SilentlyContinue).PendingFileRenameOperations) { $rebootPending = $true; $reasons += "Pending file rename operations" }; if ((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" -ErrorAction SilentlyContinue)) { $rebootPending = $true; $reasons += "Windows Update requires reboot" }; if ((Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName" -ErrorAction SilentlyContinue).ComputerName -ne (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName" -ErrorAction SilentlyContinue).ComputerName) { $rebootPending = $true; $reasons += "Computer name change pending" }; if ($rebootPending) { Write-Output ($reasons -join "; ") } else { Write-Output "" }`
+
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psCmd)
+	output, err := cmd.Output()
+	if err != nil {
+		d.logger.WithError(err).Debug("Failed to check Windows reboot status")
+		return false, ""
+	}
+
+	reason := strings.TrimSpace(string(output))
+	if reason != "" {
+		d.logger.WithField("reason", reason).Debug("Windows reboot required")
+		return true, reason
+	}
+
+	d.logger.Debug("No Windows reboot required")
+	return false, ""
+}
+
 // checkNeedsRestarting checks using needs-restarting command (RHEL/Fedora)
 func (d *Detector) checkNeedsRestarting() (bool, string) {
 	// Check if needs-restarting command exists
@@ -70,6 +98,11 @@ func (d *Detector) checkNeedsRestarting() (bool, string) {
 
 // getRunningKernel gets the currently running kernel version
 func (d *Detector) getRunningKernel() string {
+	if runtime.GOOS == "windows" {
+		// On Windows, return empty string - we don't track kernel versions the same way
+		return ""
+	}
+
 	cmd := exec.Command("uname", "-r")
 	output, err := cmd.Output()
 	if err != nil {
@@ -86,9 +119,14 @@ func (d *Detector) GetLatestInstalledKernel() string {
 
 // getLatestInstalledKernel gets the latest installed kernel version
 func (d *Detector) getLatestInstalledKernel() string {
+	if runtime.GOOS == "windows" {
+		// On Windows, return empty string - we don't track kernel versions the same way
+		return ""
+	}
+
 	// Try different methods based on common distro patterns
 
-	// Method 1: Debian/Ubuntu - check /boot for vmlinuz files
+	// Method 1: Debian/Ubuntu - check /boot for vmlinuz files (most reliable)
 	if latest := d.getLatestKernelFromBoot(); latest != "" {
 		return latest
 	}
@@ -98,7 +136,8 @@ func (d *Detector) getLatestInstalledKernel() string {
 		return latest
 	}
 
-	// Method 3: Try dpkg for Debian-based systems
+	// Method 3: Try dpkg for Debian-based systems (less reliable - has meta-package issues)
+	// This should rarely be reached since /boot check should work first
 	if latest := d.getLatestKernelFromDpkg(); latest != "" {
 		return latest
 	}
@@ -121,11 +160,32 @@ func (d *Detector) getLatestKernelFromBoot() string {
 		// Look for vmlinuz-* files
 		if strings.HasPrefix(name, "vmlinuz-") {
 			version := strings.TrimPrefix(name, "vmlinuz-")
-			// Skip generic/recovery kernels
-			if strings.Contains(version, "generic") || strings.Contains(version, "recovery") {
+			// Skip recovery kernels
+			if strings.Contains(version, "recovery") {
 				continue
 			}
-			kernels = append(kernels, version)
+			// Skip generic meta-packages (like "lts", "generic" without version numbers)
+			// These are symlinks or meta-packages, not actual kernel versions
+			if version == "lts" || version == "generic" || version == "lowlatency" {
+				// Try to resolve symlink to get actual kernel version
+				if info, err := os.Lstat("/boot/" + name); err == nil {
+					if info.Mode()&os.ModeSymlink != 0 {
+						if target, err := os.Readlink("/boot/" + name); err == nil {
+							// Extract version from symlink target
+							if strings.HasPrefix(target, "vmlinuz-") {
+								version = strings.TrimPrefix(target, "vmlinuz-")
+							} else if strings.HasPrefix(target, "/boot/vmlinuz-") {
+								version = strings.TrimPrefix(target, "/boot/vmlinuz-")
+							}
+						}
+					}
+				}
+			}
+			// Only include versions that look like actual kernel versions (start with number)
+			// This excludes meta-packages but includes real kernels ending with "-generic" or "-lts"
+			if len(version) > 0 && version[0] >= '0' && version[0] <= '9' {
+				kernels = append(kernels, version)
+			}
 		}
 	}
 
@@ -244,7 +304,7 @@ func (d *Detector) getLatestKernelFromDpkg() string {
 		return ""
 	}
 
-	var latestVersion string
+	var kernels []string
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		fields := strings.Fields(line)
@@ -259,14 +319,31 @@ func (d *Detector) getLatestKernelFromDpkg() string {
 			pkgName := fields[1]
 			version := strings.TrimPrefix(pkgName, "linux-image-")
 
-			// Skip meta packages
-			if version == "generic" || version == "lowlatency" {
+			// Skip meta packages (generic, lowlatency, generic-hwe-*, amd64, etc.)
+			// Meta-packages don't have version numbers, just descriptive names
+			if version == "generic" || version == "lowlatency" || version == "amd64" {
 				continue
 			}
-
-			latestVersion = version
+			// Skip meta-packages like "generic-hwe-24.04" (contains "generic-" prefix but no version)
+			// Real kernel versions contain numbers like "6.14.0-37-generic"
+			if strings.HasPrefix(version, "generic-") || strings.HasPrefix(version, "lowlatency-") {
+				continue
+			}
+			// Only include versions that start with a number (actual kernel versions)
+			if len(version) > 0 && version[0] >= '0' && version[0] <= '9' {
+				kernels = append(kernels, version)
+			}
 		}
 	}
 
-	return latestVersion
+	// Sort kernels by version and return the latest
+	if len(kernels) == 0 {
+		return ""
+	}
+
+	sort.Slice(kernels, func(i, j int) bool {
+		return compareKernelVersions(kernels[i], kernels[j]) < 0
+	})
+
+	return kernels[len(kernels)-1]
 }

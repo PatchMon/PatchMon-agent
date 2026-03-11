@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -27,6 +28,12 @@ func New(logger *logrus.Logger) *Manager {
 
 // UpdateSchedule updates the cron schedule with the given interval and executable path
 func (m *Manager) UpdateSchedule(updateInterval int, executablePath string) error {
+	if runtime.GOOS == "windows" {
+		// Windows doesn't use cron - scheduling is handled via Windows Task Scheduler or Service
+		m.logger.Warn("Cron scheduling is not supported on Windows. Use Windows Task Scheduler or Service instead.")
+		return nil
+	}
+
 	if updateInterval <= 0 {
 		return fmt.Errorf("invalid update interval: %d", updateInterval)
 	}
@@ -57,6 +64,15 @@ func (m *Manager) UpdateSchedule(updateInterval int, executablePath string) erro
 
 // GetEntries returns all current cron entries
 func (m *Manager) GetEntries() []string {
+	if runtime.GOOS == "windows" {
+		// Windows doesn't use cron files
+		return []string{}
+	}
+
+	if config.CronFilePath == "" {
+		return []string{}
+	}
+
 	if data, err := os.ReadFile(config.CronFilePath); err == nil {
 		// Filter out empty lines and comments
 		var validLines []string
@@ -93,6 +109,15 @@ func (m *Manager) GetSchedule() string {
 
 // Remove removes the PatchMon agent's cron file
 func (m *Manager) Remove() error {
+	if runtime.GOOS == "windows" {
+		// Windows doesn't use cron files
+		return nil
+	}
+
+	if config.CronFilePath == "" {
+		return nil
+	}
+
 	if err := os.Remove(config.CronFilePath); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			// File doesn't exist, which is fine

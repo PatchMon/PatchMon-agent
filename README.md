@@ -4,17 +4,47 @@
 
 # PatchMon Agent
 
-PatchMon's monitoring agent sends package and repository information to the PatchMon server.
+PatchMon's monitoring agent sends package and repository information to the PatchMon server. Supports **Linux** and **Windows**.
 
 ## Installation
 
-### Binary Installation
+### One-Line Install (Recommended)
+
+The easiest way to install is using the one-liner from the PatchMon UI. After adding a host, copy the install command shown in the UI.
+
+**Linux:**
+```bash
+curl -s http://your-server:3000/api/v1/hosts/install -H "X-API-ID: your_api_id" -H "X-API-KEY: your_api_key" | sh
+```
+
+**Windows (PowerShell as Administrator):**
+```powershell
+$script = Invoke-WebRequest -Uri "http://your-server:3000/api/v1/hosts/install" -Headers @{"X-API-ID"="your_api_id"; "X-API-KEY"="your_api_key"} -UseBasicParsing; $script.Content | Out-File -FilePath "$env:TEMP\patchmon-install.ps1" -Encoding utf8; powershell.exe -ExecutionPolicy Bypass -File "$env:TEMP\patchmon-install.ps1"
+```
+
+### Manual Binary Installation
+
+#### Linux
 
 1. **Download** the appropriate binary for your architecture from the releases
 2. **Make executable** and move to system path:
    ```bash
    chmod +x patchmon-agent-linux-amd64
    sudo mv patchmon-agent-linux-amd64 /usr/local/bin/patchmon-agent
+   ```
+
+#### Windows
+
+1. **Download** `patchmon-agent-windows-amd64.exe` from releases
+2. **Move** to Program Files:
+   ```powershell
+   New-Item -ItemType Directory -Force -Path "C:\Program Files\PatchMon"
+   Move-Item patchmon-agent-windows-amd64.exe "C:\Program Files\PatchMon\patchmon-agent.exe"
+   ```
+3. **Create Windows Service:**
+   ```powershell
+   New-Service -Name PatchMonAgent -BinaryPathName '"C:\Program Files\PatchMon\patchmon-agent.exe" serve' -DisplayName "PatchMon Agent" -StartupType Automatic
+   Start-Service -Name PatchMonAgent
    ```
 
 ### From Source
@@ -57,9 +87,16 @@ PatchMon's monitoring agent sends package and repository information to the Patc
 
 ### Configuration Files
 
-- **Main Config**: `/etc/patchmon/config.yml` (YAML format)
-- **Credentials**: `/etc/patchmon/credentials.yml` (YAML format, 600 permissions)
-- **Logs**: `/var/log/patchmon-agent.log`
+#### Linux
+- **Main Config**: `/etc/patchmon/config.yml`
+- **Credentials**: `/etc/patchmon/credentials.yml` (600 permissions)
+- **Logs**: `/etc/patchmon/logs/patchmon-agent.log`
+
+#### Windows
+- **Main Config**: `C:\ProgramData\PatchMon\config.yml`
+- **Credentials**: `C:\ProgramData\PatchMon\credentials.yml`
+- **Logs**: `C:\ProgramData\PatchMon\patchmon-agent.log`
+- **Binary**: `C:\Program Files\PatchMon\patchmon-agent.exe`
 
 ## Usage
 
@@ -105,9 +142,41 @@ api_id: "patchmon_1a2b3c4d5e6f7890"
 api_key: "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
 ```
 
+## Service Management
+
+### Linux (systemd)
+
+```bash
+# Check status
+systemctl status patchmon-agent
+
+# Start/stop/restart
+sudo systemctl start patchmon-agent
+sudo systemctl stop patchmon-agent
+sudo systemctl restart patchmon-agent
+
+# View logs
+journalctl -u patchmon-agent -f
+```
+
+### Windows Service
+
+```powershell
+# Check status
+Get-Service -Name PatchMonAgent
+
+# Start/stop/restart
+Start-Service -Name PatchMonAgent
+Stop-Service -Name PatchMonAgent
+Restart-Service -Name PatchMonAgent
+
+# View logs
+Get-Content "C:\ProgramData\PatchMon\patchmon-agent.log" -Tail 50
+```
+
 ## Automation
 
-### Crontab Setup
+### Linux Crontab Setup
 
 The agent can automatically configure crontab based on server policies:
 
@@ -121,61 +190,59 @@ This creates entries like:
 # Hourly reports (at minute 15)
 15 * * * * /usr/local/bin/patchmon-agent report >/dev/null 2>&1
 15 * * * * /usr/local/bin/patchmon-agent update-crontab >/dev/null 2>&1
-
-# Or custom interval (every 30 minutes)
-*/30 * * * * /usr/local/bin/patchmon-agent report >/dev/null 2>&1
-*/30 * * * * /usr/local/bin/patchmon-agent update-crontab >/dev/null 2>&1
 ```
+
+### Windows
+
+On Windows, the agent runs as a Windows Service and handles scheduling internally. No crontab setup is needed.
 
 ## Uninstallation
 
-The agent includes a built-in uninstall command for complete removal:
+### Linux
 
-### Basic Uninstall
+The agent includes a built-in uninstall command:
+
 ```bash
-# Remove agent binary, crontab entries, and backup files
+# Basic uninstall (removes binary, crontab, backups)
 sudo patchmon-agent uninstall
-```
 
-### Complete Uninstall
-```bash
-# Remove everything including configuration and logs
-sudo patchmon-agent uninstall --remove-config --remove-logs
-
-# Or use the shortcut flag
-sudo patchmon-agent uninstall --remove-all  # or -a
+# Complete uninstall (includes config and logs)
+sudo patchmon-agent uninstall --remove-all
 
 # Silent complete removal
 sudo patchmon-agent uninstall -af
 ```
 
-### Uninstall Options
+**Or use the server-provided script:**
 ```bash
+curl -s http://your-server:3000/api/v1/hosts/remove | sh
+```
+
+### Windows
+
+**One-liner removal (PowerShell as Administrator):**
+```powershell
+$script = Invoke-WebRequest -Uri "http://your-server:3000/api/v1/hosts/remove" -UseBasicParsing; $script.Content | Out-File -FilePath "$env:TEMP\patchmon-remove.ps1" -Encoding utf8; powershell.exe -ExecutionPolicy Bypass -File "$env:TEMP\patchmon-remove.ps1" -RemoveAll
+```
+
+**Manual removal:**
+```powershell
+# Stop and remove the service
+Stop-Service -Name PatchMonAgent -Force
+sc.exe delete PatchMonAgent
+
+# Remove files
+Remove-Item -Path "C:\Program Files\PatchMon" -Recurse -Force
+Remove-Item -Path "C:\ProgramData\PatchMon" -Recurse -Force
+```
+
+### Uninstall Options
+```
 --remove-config    # Remove configuration and credentials files
 --remove-logs      # Remove log files  
 --remove-all, -a   # Remove all files (shortcut for --remove-config --remove-logs)
 --force, -f        # Skip confirmation prompts
 ```
-
-### What Gets Removed
-
-**Always removed:**
-- Agent binary (current executable)
-- Additional binaries found in common locations
-- Crontab entries related to patchmon-agent
-- Backup files created during updates
-
-**Optional (with flags):**
-- Configuration files (`--remove-config`)
-- Credentials files (`--remove-config`) 
-- Log files (`--remove-logs`)
-
-The uninstall process will:
-1. Show what will be removed
-2. Prompt for confirmation (unless `--force` is used)
-3. Remove crontab entries first
-4. Remove additional files and binaries
-5. Use a self-destruct mechanism to remove the main binary
 
 ## Logging
 
